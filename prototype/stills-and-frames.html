@@ -1,0 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stills &amp; Frames — a repo portrait instrument</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ground:#E4E5E0;
+  --ground-deep:#D6D8D1;
+  --ink:#15150F;
+  --ink-soft:#5C5C52;
+  --rule:#BFC1B8;
+  --paper:#EFF0EB;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{
+  background:var(--ground);
+  color:var(--ink);
+  font-family:"Archivo",system-ui,sans-serif;
+  display:grid;
+  grid-template-columns:300px 1fr;
+  overflow:hidden;
+}
+/* ---------- instrument rail ---------- */
+#rail{
+  background:var(--paper);
+  border-right:1px solid var(--rule);
+  padding:18px 16px 40px;
+  overflow-y:auto;
+  display:flex;flex-direction:column;gap:20px;
+}
+h1{
+  font-size:15px;font-weight:800;letter-spacing:-.03em;
+  text-transform:uppercase;margin:0;line-height:1.05;
+}
+h1 small{display:block;font-size:9.5px;font-weight:600;letter-spacing:.14em;color:var(--ink-soft);margin-top:5px}
+.grp{display:flex;flex-direction:column;gap:8px}
+.lbl{
+  font-size:9px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--ink-soft);
+}
+input[type=text]{
+  font-family:"IBM Plex Mono",monospace;font-size:12px;
+  padding:8px 9px;border:1px solid var(--rule);background:var(--ground);
+  color:var(--ink);width:100%;border-radius:0;
+}
+input[type=text]:focus,button:focus-visible,input[type=range]:focus-visible{
+  outline:2px solid var(--ink);outline-offset:1px;
+}
+button{
+  font-family:"Archivo",sans-serif;font-size:10px;font-weight:700;
+  letter-spacing:.12em;text-transform:uppercase;
+  padding:9px 10px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);
+  cursor:pointer;border-radius:0;
+}
+button.ghost{background:transparent;color:var(--ink)}
+button:disabled{opacity:.35;cursor:default}
+.row{display:flex;gap:6px}
+.row>*{flex:1}
+.param{display:flex;flex-direction:column;gap:3px}
+.param .top{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.param .val{font-family:"IBM Plex Mono",monospace;font-size:11px;font-weight:500}
+.param .nm{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft)}
+.param .src{font-size:8.5px;letter-spacing:.05em;color:var(--ink-soft);font-style:italic}
+input[type=range]{width:100%;accent-color:var(--ink);height:16px}
+table{width:100%;border-collapse:collapse;font-family:"IBM Plex Mono",monospace;font-size:10.5px}
+td{padding:2px 0;vertical-align:top}
+td.k{color:var(--ink-soft)}
+td.v{text-align:right;font-weight:500}
+#legend{display:flex;flex-direction:column;gap:3px}
+.leg{display:grid;grid-template-columns:11px 1fr auto;gap:7px;align-items:center;
+  font-family:"IBM Plex Mono",monospace;font-size:10px}
+.leg i{width:11px;height:11px;display:block}
+.leg span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;direction:rtl;text-align:left}
+.leg b{font-weight:500;color:var(--ink-soft)}
+#errs{font-family:"IBM Plex Mono",monospace;font-size:10px;color:var(--ink-soft);
+  display:flex;flex-direction:column;gap:2px}
+#errs .e{display:flex;justify-content:space-between;gap:8px}
+hr{border:0;border-top:1px solid var(--rule);margin:0}
+.note{font-size:10px;line-height:1.45;color:var(--ink-soft)}
+/* ---------- stage ---------- */
+#stage{position:relative;overflow:hidden;cursor:grab;background:var(--ground)}
+#stage.drag{cursor:grabbing}
+#scene{position:absolute;inset:0;perspective:2200px;perspective-origin:50% 50%}
+#pivot{
+  position:absolute;left:50%;top:50%;width:0;height:0;
+  transform-style:preserve-3d;
+}
+.tile{position:absolute;transform-style:preserve-3d;will-change:transform}
+.tile .m{position:absolute}
+#hud{
+  position:absolute;left:18px;bottom:16px;
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-soft);
+  display:flex;gap:18px;align-items:flex-end;pointer-events:none;
+}
+#hud .big{font-size:26px;font-weight:500;color:var(--ink);line-height:.9;letter-spacing:-.02em}
+#hud .u{font-size:9px;letter-spacing:.14em;text-transform:uppercase}
+#state{
+  position:absolute;right:18px;top:16px;text-align:right;pointer-events:none;
+  font-size:10px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;
+}
+#state .sub{font-family:"IBM Plex Mono",monospace;font-size:9.5px;font-weight:400;
+  letter-spacing:.02em;text-transform:none;color:var(--ink-soft);margin-top:4px;max-width:230px}
+#msg{
+  position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+  max-width:400px;text-align:center;font-size:12px;line-height:1.5;
+}
+#msg .t{font-weight:800;letter-spacing:-.02em;font-size:15px;margin-bottom:6px;text-transform:uppercase}
+#msg code{font-family:"IBM Plex Mono",monospace;font-size:11px;background:var(--ground-deep);padding:1px 4px}
+.hidden{display:none!important}
+#ctrls{position:absolute;right:18px;bottom:16px;display:flex;gap:6px}
+@media (prefers-reduced-motion:reduce){#pivot{transition:none!important}}
+@media (max-width:820px){
+  body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  #rail{max-height:44vh}
+}
+</style>
+</head>
+<body>
+
+<aside id="rail">
+  <h1>Stills &amp; Frames<small>REPO PORTRAIT · PARAMETRIC</small></h1>
+
+  <div class="grp">
+    <label class="lbl" for="handle">Handle or DID</label>
+    <input type="text" id="handle" value="pixeline.be" spellcheck="false" autocapitalize="none">
+    <div class="row">
+      <button id="load">Draw</button>
+      <button id="stop" class="ghost" disabled>Stop</button>
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="grp" id="params">
+    <div class="lbl">Parameters</div>
+    <div class="param">
+      <div class="top"><span class="nm">Silence threshold</span><span class="val" id="v-gap">—</span></div>
+      <input type="range" id="p-gap" min="5" max="720" step="5" value="90">
+      <div class="src">defines where one session ends</div>
+    </div>
+    <div class="param">
+      <div class="top"><span class="nm">Twist gain</span><span class="val" id="v-twist">14°</span></div>
+      <input type="range" id="p-twist" min="0" max="40" step="1" value="14">
+      <div class="src">cadence → rotation per tile</div>
+    </div>
+    <div class="param">
+      <div class="top"><span class="nm">Silence depth</span><span class="val" id="v-depth">28</span></div>
+      <input type="range" id="p-depth" min="2" max="90" step="1" value="28">
+      <div class="src">gap length → distance between plates</div>
+    </div>
+    <div class="param">
+      <div class="top"><span class="nm">Decay</span><span class="val" id="v-decay">0.70</span></div>
+      <input type="range" id="p-decay" min="0" max="100" step="1" value="70">
+      <div class="src">how fast the past loses saturation</div>
+    </div>
+    <div class="param">
+      <div class="top"><span class="nm">Depth limit</span><span class="val" id="v-tiles">140</span></div>
+      <input type="range" id="p-tiles" min="10" max="400" step="10" value="140">
+      <div class="src">most recent sessions drawn</div>
+    </div>
+    <div class="param">
+      <div class="top"><span class="nm">Record ceiling</span><span class="val" id="v-cap">4000</span></div>
+      <input type="range" id="p-cap" min="500" max="12000" step="500" value="4000">
+      <div class="src">how deep to read (raise it, reload)</div>
+    </div>
+  </div>
+
+  <hr>
+
+  <div class="grp">
+    <div class="lbl">Measured</div>
+    <table id="stats"><tbody>
+      <tr><td class="k">status</td><td class="v" id="s-status">idle</td></tr>
+    </tbody></table>
+  </div>
+
+  <div class="grp">
+    <div class="lbl">Hue = collection</div>
+    <div id="legend"><div class="note">Nothing read yet.</div></div>
+  </div>
+
+  <div class="grp">
+    <div class="lbl">Errors found</div>
+    <div id="errs"><div class="note">Glitch is not a filter here. Torn blocks are real invalid records.</div></div>
+  </div>
+
+  <hr>
+  <div class="note">
+    Drag to orbit · scroll to zoom · every mark traces to a number in the repo.
+  </div>
+</aside>
+
+<main id="stage">
+  <div id="scene"><div id="pivot"></div></div>
+  <div id="state"><div id="state-t">no repo loaded</div><div class="sub" id="state-s">Enter a handle and press Draw.</div></div>
+  <div id="hud" class="hidden">
+    <div><div class="big" id="hud-ang">0.0</div><div class="u">view angle °</div></div>
+    <div><div class="big" id="hud-ses">0</div><div class="u">sessions</div></div>
+    <div><div class="big" id="hud-rec">0</div><div class="u">records</div></div>
+  </div>
+  <div id="ctrls">
+    <button id="frontal" class="ghost">Frontal view</button>
+    <button id="oblique" class="ghost">Oblique</button>
+  </div>
+  <div id="msg"></div>
+</main>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s);
+const pivot=$("#pivot"), stage=$("#stage"), msg=$("#msg");
+
+/* ============ atproto reading ============ */
+const B32="234567abcdefghijklmnopqrstuvwxyz";
+function tidToMs(rkey){
+  if(typeof rkey!=="string"||rkey.length!==13)return null;
+  let n=0n;
+  for(const c of rkey){const i=B32.indexOf(c);if(i<0)return null;n=n*32n+BigInt(i);}
+  const ms=Number((n>>10n)/1000n);
+  return (ms>1104537600000 && ms<Date.now()+864e5)?ms:null;
+}
+async function jget(url,ac){
+  const r=await fetch(url,{signal:ac.signal});
+  if(!r.ok)throw new Error(r.status+" from "+new URL(url).host);
+  return r.json();
+}
+async function resolveIdentity(input,ac){
+  let did=input.trim().replace(/^@/,"");
+  if(!did.startsWith("did:")){
+    const j=await jget("https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle="+encodeURIComponent(did),ac);
+    did=j.did;
+  }
+  let doc;
+  if(did.startsWith("did:plc:")) doc=await jget("https://plc.directory/"+did,ac);
+  else if(did.startsWith("did:web:")) doc=await jget("https://"+did.slice(8).replace(/:/g,"/")+"/.well-known/did.json",ac);
+  else throw new Error("Unsupported DID method: "+did.split(":")[1]);
+  const svc=(doc.service||[]).find(s=>String(s.id).endsWith("atproto_pds"));
+  if(!svc)throw new Error("DID document lists no PDS service");
+  return {did,pds:svc.serviceEndpoint.replace(/\/$/,"")};
+}
+
+/* real error audit — no simulated glitch */
+const ENC=new TextEncoder();
+function audit(col,rkey,val,tid){
+  const e=[];
+  if(!val||typeof val!=="object"){e.push("empty value");return e;}
+  if(val.$type&&val.$type!==col)e.push("$type ≠ collection");
+  const claimed=val.createdAt!=null?Date.parse(val.createdAt):null;
+  if(val.createdAt!=null&&Number.isNaN(claimed))e.push("unparseable createdAt");
+  else if(claimed!=null&&claimed>Date.now()+36e5)e.push("createdAt in the future");
+  else if(claimed!=null&&tid!=null&&Math.abs(tid-claimed)>864e5)e.push("clock skew > 24h");
+  if(val.createdAt==null&&rkey!=="self")e.push("no createdAt");
+  if(typeof val.text==="string"){
+    if([...val.text].length>300)e.push("text over 300 graphemes");
+    if(Array.isArray(val.facets)){
+      const len=ENC.encode(val.text).length;
+      for(const f of val.facets){
+        const i=f&&f.index||{};
+        if(!(i.byteStart>=0)||!(i.byteEnd<=len)||i.byteStart>i.byteEnd){e.push("facet byte range outside text");break;}
+      }
+    }
+  }
+  const imgs=val.embed&&val.embed.images;
+  if(Array.isArray(imgs)&&imgs.some(im=>!im||!im.image||!im.image.mimeType))e.push("blob without mimeType");
+  if(val.reply&&!(val.reply.root&&val.reply.parent))e.push("reply missing root or parent");
+  return e;
+}
+
+async function readRepo(input,cap,ac,onProgress){
+  onProgress("resolving identity");
+  const {did,pds}=await resolveIdentity(input,ac);
+  onProgress("reading "+new URL(pds).host);
+  const desc=await jget(pds+"/xrpc/com.atproto.repo.describeRepo?repo="+encodeURIComponent(did),ac);
+  const cols=(desc.collections||[]).slice().sort();
+  if(!cols.length)throw new Error("Repo is empty — no collections to read.");
+  const recs=[],errorTally=new Map();
+  outer:
+  for(const col of cols){
+    let cursor=null;
+    for(let page=0;page<80;page++){
+      const u=pds+"/xrpc/com.atproto.repo.listRecords?repo="+encodeURIComponent(did)+
+        "&collection="+encodeURIComponent(col)+"&limit=100"+(cursor?"&cursor="+encodeURIComponent(cursor):"");
+      const j=await jget(u,ac);
+      for(const r of (j.records||[])){
+        const rkey=String(r.uri).split("/").pop();
+        const tid=tidToMs(rkey);
+        const claimed=r.value&&r.value.createdAt?Date.parse(r.value.createdAt):NaN;
+        const ts=tid!=null?tid:(Number.isFinite(claimed)?claimed:null);
+        if(ts==null)continue;
+        const errs=audit(col,rkey,r.value,tid);
+        errs.forEach(x=>errorTally.set(x,(errorTally.get(x)||0)+1));
+        recs.push({col,ts,errs:errs.length});
+      }
+      onProgress(recs.length+" records · "+col.split(".").slice(-1)[0]);
+      cursor=j.cursor;
+      if(!cursor||recs.length>=cap)break;
+      if(recs.length>=cap)break outer;
+    }
+    if(recs.length>=cap)break;
+  }
+  recs.sort((a,b)=>a.ts-b.ts);
+  return {did,pds,collections:cols,records:recs,errorTally};
+}
+
+/* ============ the mapping system ============ */
+/* lexicon → a FIXED cell of the unit square, area ∝ global share.
+   constant across every tile, so dwelling becomes a vein through the depth. */
+function partition(shares){
+  const items=[...shares.entries()].sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+  const cells=new Map();
+  (function slice(list,x,y,w,h,horiz){
+    if(!list.length)return;
+    if(list.length===1){cells.set(list[0][0],{x,y,w,h});return;}
+    const total=list.reduce((s,i)=>s+i[1],0);
+    let acc=0,cut=1;
+    for(let i=0;i<list.length;i++){acc+=list[i][1];if(acc>=total/2){cut=i+1;break;}}
+    cut=Math.min(Math.max(cut,1),list.length-1);
+    const f=list.slice(0,cut).reduce((s,i)=>s+i[1],0)/total;
+    if(horiz){slice(list.slice(0,cut),x,y,w*f,h,!horiz);slice(list.slice(cut),x+w*f,y,w*(1-f),h,!horiz);}
+    else{slice(list.slice(0,cut),x,y,w,h*f,!horiz);slice(list.slice(cut),x,y+h*f,w,h*(1-f),!horiz);}
+  })(items,0,0,1,1,true);
+  return cells;
+}
+/* hue: golden-angle walk over collections sorted by NSID — deterministic, spread */
+function hues(cols){
+  const m=new Map();
+  cols.slice().sort().forEach((c,i)=>m.set(c,(i*137.507)%360));
+  return m;
+}
+function sessionize(recs,gapMs){
+  const out=[];let cur=null,prevEnd=null;
+  for(const r of recs){
+    if(!cur||r.ts-cur.end>gapMs){
+      if(cur)out.push(cur);
+      cur={start:r.ts,end:r.ts,items:[r],silence:prevEnd==null?0:r.ts-prevEnd};
+    }else{cur.end=r.ts;cur.items.push(r);}
+    prevEnd=cur.end;
+  }
+  if(cur)out.push(cur);
+  return out;
+}
+
+/* ============ state ============ */
+let DATA=null, CELLS=null, HUES=null, SESSIONS=null, ac=null;
+let ax=-24, ay=32, zoom=1;
+const P={gap:90,twist:14,depth:28,decay:70,tiles:140,cap:4000};
+const PLATE=460;
+
+function fmt(n){return n>=1e4?(n/1e3).toFixed(1)+"k":String(n)}
+function setStatus(t){$("#s-status").textContent=t}
+function showMsg(title,body){
+  msg.innerHTML=title?`<div class="t">${title}</div>${body||""}`:"";
+  msg.classList.toggle("hidden",!title);
+}
+
+/* ---- build DOM for the stack ---- */
+function build(){
+  if(!DATA)return;
+  const gapMs=P.gap*6e4;
+  SESSIONS=sessionize(DATA.records,gapMs);
+  const shown=SESSIONS.slice(-P.tiles);
+  const newest=DATA.records.length?DATA.records[DATA.records.length-1].ts:Date.now();
+  const oldestShown=shown.length?shown[0].start:newest;
+  const span=Math.max(newest-oldestShown,1);
+  const decay=P.decay/100;
+
+  /* cadence normalisation across shown sessions */
+  const cad=shown.map(s=>s.items.length/Math.max((s.end-s.start)/6e4,1));
+  const cmax=Math.max(...cad,1e-9);
+  const silences=shown.map(s=>s.silence);
+  const smax=Math.max(...silences,1);
+
+  pivot.innerHTML="";
+  let z=0,twist=0;
+  shown.forEach((s,i)=>{
+    const age=(newest-s.start)/span;                 // 0 = now, 1 = oldest shown
+    const life=Math.pow(1-age,1+decay*3);            // recency weight
+    const cadN=cad[i]/cmax;
+    twist+=cadN*P.twist;                             // helix: twist accumulates
+    z-= (6+Math.pow(silences[i]/smax,0.45)*P.depth); // silence becomes distance
+
+    const tile=document.createElement("div");
+    tile.className="tile";
+    tile.style.width=tile.style.height=PLATE+"px";
+    tile.style.left=(-PLATE/2)+"px";tile.style.top=(-PLATE/2)+"px";
+    tile.style.transform=`translateZ(${z}px) rotateZ(${twist.toFixed(2)}deg)`;
+    tile.style.opacity=(0.12+0.88*life).toFixed(3);
+
+    /* per-collection share within this session */
+    const local=new Map();
+    for(const r of s.items) local.set(r.col,(local.get(r.col)||0)+1);
+    const n=s.items.length;
+    const frag=document.createDocumentFragment();
+
+    for(const [col,count] of local){
+      const c=CELLS.get(col); if(!c)continue;
+      const h=HUES.get(col);
+      const fill=Math.sqrt(count/n);
+      const w=c.w*PLATE*fill, hh=c.h*PLATE*fill;
+      const d=document.createElement("div");
+      d.className="m";
+      d.style.left=((c.x+c.w/2)*PLATE-w/2)+"px";
+      d.style.top=((c.y+c.h/2)*PLATE-hh/2)+"px";
+      d.style.width=w+"px";d.style.height=hh+"px";
+      d.style.background=`hsl(${h} ${(18+72*life).toFixed(0)}% ${(46+16*age).toFixed(0)}%)`;
+      frag.appendChild(d);
+    }
+
+    /* transitions: the in-between is the subject.
+       small squares stepping between two cells, Boogie-Woogie dashed line. */
+    let drawn=0;
+    for(let k=1;k<s.items.length&&drawn<48;k++){
+      const a=s.items[k-1],b=s.items[k];
+      if(a.col===b.col)continue;
+      const ca=CELLS.get(a.col),cb=CELLS.get(b.col);
+      if(!ca||!cb)continue;
+      const x1=(ca.x+ca.w/2)*PLATE,y1=(ca.y+ca.h/2)*PLATE;
+      const x2=(cb.x+cb.w/2)*PLATE,y2=(cb.y+cb.h/2)*PLATE;
+      const steps=7,sz=Math.max(3,5*life+2);
+      for(let t=0;t<steps;t++){
+        const f=(t+0.5)/steps;
+        const q=document.createElement("div");
+        q.className="m";
+        q.style.left=(x1+(x2-x1)*f-sz/2)+"px";
+        q.style.top=(y1+(y2-y1)*f-sz/2)+"px";
+        q.style.width=q.style.height=sz+"px";
+        const h=t%2?HUES.get(b.col):HUES.get(a.col);
+        q.style.background=`hsl(${h} ${(30+60*life).toFixed(0)}% ${(52+12*age).toFixed(0)}%)`;
+        frag.appendChild(q);
+      }
+      drawn++;
+    }
+
+    /* glitch: only where records are actually invalid — channel-split tear */
+    for(const r of s.items){
+      if(!r.errs)continue;
+      const c=CELLS.get(r.col); if(!c)continue;
+      const off=2+r.errs*3;
+      ["#00E5FF","#FF00A8","#FFE500"].forEach((ch,j)=>{
+        const g=document.createElement("div");
+        g.className="m";
+        const sz=Math.min(c.w,c.h)*PLATE*0.34;
+        g.style.left=((c.x+c.w/2)*PLATE-sz/2+(j-1)*off)+"px";
+        g.style.top=((c.y+c.h/2)*PLATE-sz/2-(j-1)*off*0.6)+"px";
+        g.style.width=g.style.height=sz+"px";
+        g.style.background=ch;
+        g.style.opacity=(0.34*life+0.08).toFixed(3);
+        g.style.mixBlendMode="multiply";
+        frag.appendChild(g);
+      });
+    }
+
+    tile.appendChild(frag);
+    pivot.appendChild(tile);
+  });
+
+  /* readouts */
+  const errs=DATA.records.reduce((s,r)=>s+(r.errs?1:0),0);
+  $("#stats").innerHTML=`<tbody>
+    <tr><td class="k">pds</td><td class="v">${new URL(DATA.pds).host}</td></tr>
+    <tr><td class="k">collections</td><td class="v">${DATA.collections.length}</td></tr>
+    <tr><td class="k">records read</td><td class="v">${fmt(DATA.records.length)}</td></tr>
+    <tr><td class="k">sessions</td><td class="v">${fmt(SESSIONS.length)}</td></tr>
+    <tr><td class="k">tiles drawn</td><td class="v">${shown.length}</td></tr>
+    <tr><td class="k">median session</td><td class="v">${medianLen(SESSIONS)} rec</td></tr>
+    <tr><td class="k">longest silence</td><td class="v">${(smax/864e5).toFixed(1)} d</td></tr>
+    <tr><td class="k">invalid records</td><td class="v">${errs} (${(errs/DATA.records.length*100).toFixed(2)}%)</td></tr>
+    <tr><td class="k">first record</td><td class="v">${new Date(DATA.records[0].ts).toISOString().slice(0,10)}</td></tr>
+  </tbody>`;
+  $("#hud-ses").textContent=fmt(SESSIONS.length);
+  $("#hud-rec").textContent=fmt(DATA.records.length);
+  $("#hud").classList.remove("hidden");
+  render();
+}
+function medianLen(ss){
+  if(!ss.length)return 0;
+  const a=ss.map(s=>s.items.length).sort((x,y)=>x-y);
+  return a[a.length>>1];
+}
+function drawLegend(){
+  const tot=new Map();
+  for(const r of DATA.records)tot.set(r.col,(tot.get(r.col)||0)+1);
+  const items=[...tot.entries()].sort((a,b)=>b[1]-a[1]);
+  $("#legend").innerHTML=items.map(([c,n])=>
+    `<div class="leg"><i style="background:hsl(${HUES.get(c)} 74% 50%)"></i>`+
+    `<span title="${c}">${c}</span><b>${fmt(n)}</b></div>`).join("");
+  const et=[...DATA.errorTally.entries()].sort((a,b)=>b[1]-a[1]);
+  $("#errs").innerHTML=et.length
+    ? et.map(([k,v])=>`<div class="e"><span>${k}</span><b>${v}</b></div>`).join("")
+    : `<div class="note">No invalid records. A clean repo draws a clean plate — that is the honest result, not a bug.</div>`;
+}
+
+/* ---- orbit ---- */
+function render(){
+  pivot.style.transform=`scale(${zoom}) rotateX(${ax}deg) rotateY(${ay}deg)`;
+  const mag=Math.hypot(ax,ay);
+  $("#hud-ang").textContent=mag.toFixed(1);
+  const frontal=mag<1.2;
+  $("#state-t").textContent=frontal?"frontal · this is the avatar":"oblique · this is the passage";
+  $("#state-s").textContent=frontal
+    ? "All of history collapsed into one square. Nothing about time is visible from here."
+    : "Depth is silence. Twist is cadence. Each plate is one session.";
+}
+let dragging=false,lx=0,ly=0;
+stage.addEventListener("pointerdown",e=>{dragging=true;lx=e.clientX;ly=e.clientY;stage.classList.add("drag");stage.setPointerCapture(e.pointerId);});
+stage.addEventListener("pointermove",e=>{
+  if(!dragging)return;
+  ay+=(e.clientX-lx)*0.35; ax-=(e.clientY-ly)*0.35;
+  ax=Math.max(-89,Math.min(89,ax));
+  lx=e.clientX;ly=e.clientY;render();
+});
+stage.addEventListener("pointerup",e=>{dragging=false;stage.classList.remove("drag");});
+stage.addEventListener("wheel",e=>{e.preventDefault();zoom=Math.max(0.25,Math.min(3,zoom*(e.deltaY>0?0.92:1.08)));render();},{passive:false});
+function glide(tx,ty){
+  const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+  if(reduce){ax=tx;ay=ty;render();return;}
+  const sx=ax,sy=ay,t0=performance.now();
+  (function step(t){
+    const k=Math.min((t-t0)/520,1),e=1-Math.pow(1-k,3);
+    ax=sx+(tx-sx)*e; ay=sy+(ty-sy)*e; render();
+    if(k<1)requestAnimationFrame(step);
+  })(t0);
+}
+$("#frontal").onclick=()=>glide(0,0);
+$("#oblique").onclick=()=>glide(-24,32);
+
+/* ---- params ---- */
+const bind=(id,key,fmtv,rebuild)=>{
+  const el=$("#p-"+id),out=$("#v-"+id);
+  const upd=()=>{P[key]=+el.value;out.textContent=fmtv(+el.value);if(rebuild&&DATA)build();};
+  el.addEventListener("input",upd);upd();
+};
+bind("gap","gap",v=>v>=60?(v/60).toFixed(1)+" h":v+" min",true);
+bind("twist","twist",v=>v+"°",true);
+bind("depth","depth",v=>String(v),true);
+bind("decay","decay",v=>(v/100).toFixed(2),true);
+bind("tiles","tiles",v=>String(v),true);
+bind("cap","cap",v=>fmt(v),false);
+
+/* ---- load ---- */
+async function load(){
+  if(ac)ac.abort();
+  ac=new AbortController();
+  const my=ac;
+  $("#load").disabled=true;$("#stop").disabled=false;
+  showMsg("reading","<div class=note>Resolving identity…</div>");
+  pivot.innerHTML="";$("#hud").classList.add("hidden");
+  try{
+    const d=await readRepo($("#handle").value,P.cap,my,t=>{
+      setStatus(t);
+      showMsg("reading",`<div class=note>${t}</div>`);
+    });
+    if(my.signal.aborted)return;
+    DATA=d;
+    const shares=new Map();
+    for(const r of d.records)shares.set(r.col,(shares.get(r.col)||0)+1);
+    CELLS=partition(shares); HUES=hues([...shares.keys()]);
+    /* adaptive silence threshold from the actual gap distribution */
+    const gaps=[];for(let i=1;i<d.records.length;i++)gaps.push(d.records[i].ts-d.records[i-1].ts);
+    if(gaps.length){
+      gaps.sort((a,b)=>a-b);
+      const med=gaps[gaps.length>>1]||6e5;
+      const sug=Math.round(Math.min(720,Math.max(15,med*10/6e4))/5)*5;
+      $("#p-gap").value=sug;$("#p-gap").dispatchEvent(new Event("input"));
+    }
+    setStatus("drawn");
+    drawLegend(); build(); showMsg(null);
+  }catch(err){
+    if(my.signal.aborted){setStatus("stopped");showMsg("stopped","<div class=note>Reading cancelled.</div>");return;}
+    setStatus("failed");
+    const m=String(err.message||err);
+    showMsg("cannot read that repo",
+      `<div class=note>${m}.<br><br>Likely causes: the handle does not resolve, or the PDS does not send CORS headers for browser reads. A self-hosted PDS needs <code>Access-Control-Allow-Origin</code> on <code>/xrpc/</code> for this to work from a page.</div>`);
+  }finally{$("#load").disabled=false;$("#stop").disabled=true;}
+}
+$("#load").onclick=load;
+$("#stop").onclick=()=>{if(ac)ac.abort();};
+$("#handle").addEventListener("keydown",e=>{if(e.key==="Enter")load();});
+render();
+showMsg("no repo loaded","<div class=note>This reads every collection in a repo — including lexicons it has never heard of — and draws the intervals between them. Press Draw.</div>");
+</script>
+</body>
+</html>
