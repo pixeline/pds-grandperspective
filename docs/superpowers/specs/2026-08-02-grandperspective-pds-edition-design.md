@@ -20,7 +20,7 @@ and delete on their own.
 
 **In scope for this release**
 
-- Read any repo by handle or DID, unauthenticated.
+- Read any repo by handle or DID, unauthenticated, **in full — there is no record ceiling**.
 - Treemap sized by stored bytes or record count, one cell per record.
 - Filter by collection/namespace, by timeframe, and by full-text search over record content.
 - Sign in with atproto OAuth.
@@ -95,9 +95,10 @@ hue stable across reads, so it must be preserved exactly.
 - `portrait/params.js` splits:
   - `repo/format.js` — `fmtNum`, `fmtBytes`, `fmtDur`, `fmtDate`. All still used.
   - `repo/urlstate.js` — hash round-trip, rewritten for the new state shape (§7).
-  - The `PARAMS` array is deleted. Five of six entries were stack parameters
-    (`gap`, `twist`, `depth`, `decay`, `tiles`); only `cap` survives, and it becomes a
-    plain number field rather than a slider.
+  - The `PARAMS` array is deleted outright, and with it the whole slider rail. Five of the
+    six entries were stack parameters (`gap`, `twist`, `depth`, `decay`, `tiles`); the
+    sixth, `cap`, is removed by §3 — the repo is now read in full, so there is no ceiling
+    to expose.
 - `portrait/portrait.spec.js` splits into `repo/treemap.spec.js`, `repo/hues.spec.js`,
   `repo/filter.spec.js`, `atproto/tid.spec.js`, `atproto/audit.spec.js`. Stack assertions
   are dropped. The suite stays green at every step of the strip.
@@ -116,7 +117,8 @@ hue stable across reads, so it must be preserved exactly.
 ```
 src/lib/atproto/tid.js          TID → ms (server clock, preferred over createdAt)
 src/lib/atproto/identity.js     handle → DID → PDS endpoint (did:plc + did:web)
-src/lib/atproto/read.js         describeRepo + FAIR paginated listRecords
+src/lib/atproto/read.js         orchestrates: CAR first, listRecords fallback, size gate
+src/lib/atproto/car.js          NEW — getRepo CAR fetch + parse, true stored byte sizes
 src/lib/atproto/audit.js        error taxonomy, scoped per lexicon
 src/lib/atproto/typeahead.js    actor search (typeahead.waow.tech)
 src/lib/atproto/session.js      NEW — OAuth client, sign in/out, granted scopes
@@ -139,42 +141,107 @@ future canvas or WebGL renderer a leaf change rather than a rewrite.
 
 ## 3. Read path
 
-One change to `src/lib/atproto/read.js`: retain `r.value` on each record rather than
-measuring its byte length and discarding it.
+The read path is **replaced**, not adjusted. This is the largest change in the spec, and it
+is driven by a correctness defect in the current reader rather than by the new features.
 
-```js
-records.push({
-  col: st.col, ts, rkey,
-  errs: errNames.length, errNames,
-  bytes: JSON.stringify(r.value ?? null).length,
-  value: r.value          // NEW — search needs something to search
-});
+### 3.1 The defect: truncation falsifies proportion
+
+`read.js` reads breadth-first under a record ceiling. At the defaults — `cap` 4000 across
+195 collections — pass 1's page size is `ceil(4000/195)` = **21 records per collection**.
+195 × 21 exceeds 4000, so the ceiling is reached at roughly collection 191, **pass 2 never
+runs**, and the last few collections are never read at all.
+
+The result: every collection holding more than 21 records is truncated to exactly 21.
+`app.bsky.feed.like` with tens of thousands of records and an obscure lexicon with 22 both
+render as equal-area blocks. Collections *under* 21 records are read completely, so they
+render smaller than the giants they may dwarf.
+
+A treemap's single claim is that area is proportional to size. Equalized sampling breaks
+exactly that claim, so the current reader cannot feed this viewer.
+
+**Why the previous finding does not generalize.** Fair round-robin reading was the correct
+fix *for the stack*, whose requirement was only that every collection be *present* — a
+sequential alphabetical scan let `app.bsky.feed.like` eat the whole ceiling and leave 181
+of 195 collections invisible. Presence was the goal; proportion was not. It was always a
+mitigation for truncation, so removing truncation removes the need for it. This is recorded
+here so the round-robin is not "restored" later as a lost improvement.
+
+### 3.2 Primary path: `com.atproto.sync.getRepo`
+
+One request returns the complete repo — all records, MST nodes, and the signed commit — as
+a CAR file. The endpoint is [deliberately unauthenticated](https://atproto.com/specs/sync);
+repo content is public.
+
+New module `src/lib/atproto/car.js`, wrapping `readCar` and `cborToLexRecord` from
+`@atproto/repo`:
+
+```
+readRepoCar(pds, did, signal, onProgress) → { records, collections, rev }
 ```
 
-**Why.** Full-content search is the agreed behaviour (§5), and it is the only version that
-works for lexicons the app has never seen. The modal then also has the record JSON without
-a second fetch.
+Two advantages beyond completeness:
 
-**Cost.** Retained bytes are approximately the `bytes` total already computed and displayed
-— a few MB at the 4000-record default, well within a browser tab. At the 12000 ceiling it
-grows proportionally; the stats line already surfaces stored size, so the cost is visible
-to the user rather than hidden.
+- **Byte sizes become measurements.** Today `bytes` is `JSON.stringify(value).length` — a
+  re-serialization into a format the PDS does not use. The CAR carries each record as a
+  DAG-CBOR block, so its length is what the repo actually stores. For a tool whose premise
+  is disk usage, that is the difference between an estimate and a measurement.
+- **One round trip** instead of hundreds, with byte-level progress from the response stream.
 
-**Unchanged, and load-bearing.** Both findings that produced the current read path stay:
+### 3.3 Fallback path: exhaustive `listRecords`
 
-- **Fair reading.** Pass 1 samples every collection with a small page; pass 2 round-robins
-  full pages among the unfinished. A sequential alphabetical scan let `app.bsky.feed.like`
-  consume the entire 4000 ceiling and leave 181 of 195 collections unread. Never
-  reintroduce a sequential scan.
-- **Scoped auditing.** Rules apply only to what a lexicon actually promises. Judging
-  non-Bluesky lexicons by `app.bsky`'s schema produced 304 false "invalid records"; scoping
-  dropped it to 64 real ones.
+When `getRepo` is unavailable — the PDS blocks the sync endpoint, or omits CORS headers on
+it specifically — fall back to `describeRepo` plus `listRecords`, paged to exhaustion on
+every collection, with no ceiling.
 
-**Reads stay unauthenticated even when signed in.** `describeRepo` and `listRecords` are
-public. Routing them through an OAuth-bound agent would send them via the user's PDS acting
-as an AppView proxy — a contract non-`bsky.social` deployments (eurosky.social, self-hosted,
-Cocoon) do not reliably implement, and a common source of `401` after an otherwise successful
-OAuth. The signed-in state changes writes only.
+Two rules for the fallback:
+
+- **Read order no longer matters,** because every collection is read to exhaustion either
+  way. Sequential is fine; the round-robin is not reintroduced.
+- **The map renders only when the read completes.** A partially-read treemap misstates
+  proportion in exactly the way §3.1 describes, so progress is shown as progress rather
+  than as a map that is quietly wrong.
+
+`bytes` on this path remains the JSON-length estimate. The stats line states which
+measurement is in use, so an estimate is never presented as a measurement.
+
+### 3.4 Record shape
+
+```js
+{
+  col, ts, rkey,
+  errs, errNames,
+  bytes,        // DAG-CBOR block length (CAR) or JSON length (fallback)
+  exact,        // true on the CAR path, false on the fallback
+  value         // retained — search needs something to search
+}
+```
+
+Retaining `value` serves both full-content search (§5) and the record modal (§9), which
+then needs no second fetch and cannot disagree with what the map measured.
+
+### 3.5 Size warning
+
+No silent truncation, ever. Before committing to a large read, establish the size —
+`Content-Length` on the CAR response, or a `describeRepo` probe on the fallback — and if it
+exceeds a threshold, state the real figures and let the user choose:
+
+> `≈240 MB · ~180,000 records. Reading this fully will use roughly that much memory.
+> Read it all / Cancel`
+
+If they decline, they have still learned the repo's true size, which is a legitimate answer
+from a disk-usage tool. What they are never given is a map that looks complete and is not.
+
+### 3.6 Unchanged
+
+**Scoped auditing** stays exactly as it is: rules apply only to what a lexicon actually
+promises. Judging non-Bluesky lexicons by `app.bsky`'s schema produced 304 false "invalid
+records"; scoping dropped it to 64 real ones.
+
+**Reads stay unauthenticated even when signed in.** `getRepo`, `describeRepo` and
+`listRecords` are all public. Routing them through an OAuth-bound agent would send them via
+the user's PDS acting as an AppView proxy — a contract non-`bsky.social` deployments
+(eurosky.social, self-hosted, Cocoon) do not reliably implement, and a common source of
+`401` after an otherwise successful OAuth. The signed-in state changes writes only.
 
 ---
 
@@ -254,13 +321,12 @@ shareable:
 |---|---|
 | `h` | handle or DID being viewed |
 | `w` | weigh mode — `bytes` (default) or `records` |
-| `cap` | record ceiling, omitted when default |
 | `c` | comma-separated collection/prefix filter, omitted when empty |
 | `from`, `to` | timeframe bounds as ISO dates, omitted when unset |
 | `q` | search query, omitted when empty |
 
 The `v` (viewer) key is removed — there is one viewer. Stack keys (`gap`, `twist`, `depth`,
-`decay`, `tiles`, `cam`, `ax`, `ay`) are removed.
+`decay`, `tiles`, `cam`, `ax`, `ay`) are removed, and `cap` with them (§3).
 
 The hash is read once on mount, not in a reactive effect. An effect that both reads and
 writes `params` makes itself its own dependency and Svelte rejects it — this was learned
@@ -275,8 +341,9 @@ the hard way and the fix must be preserved.
 A **public client** — browser SPA, no server, no client secret, per the skill's app-pattern
 decision. `token_endpoint_auth_method: "none"`.
 
-Library: **`@atproto/oauth-client-browser`**. This is the project's first runtime dependency
-(`package.json` currently has none). The trade is deliberate: the library owns PAR, PKCE
+Library: **`@atproto/oauth-client-browser`**. Together with `@atproto/repo` (§3.2) it is one
+of the project's first two runtime dependencies — `package.json` currently has none. The
+trade is deliberate: the library owns PAR, PKCE
 S256, per-session DPoP keypair generation, the DPoP nonce retry protocol, per-server nonce
 rotation, auth-server discovery, `state` generation and single-use consumption, callback
 `iss` verification, token `sub` verification, bidirectional handle verification, and session
@@ -421,11 +488,13 @@ Repo-scope controls only; per-record content lives in the modal.
    out. When signed in but viewing another repo, states that writes are disabled.
 3. **Filters** — collection tree with namespace-level checkboxes; timeframe as two date
    inputs plus quick ranges; search box.
-4. **Record ceiling** — number field, the one surviving parameter.
-5. **Measured** — PDS host, collections, records read, stored size, first record, whether
-   the ceiling was hit.
-6. **Legend** — hue per collection, clickable to filter.
-7. **Errors** — the audit tally.
+4. **Measured** — PDS host, collections, records, stored size, first record, the repo
+   revision, and which read path produced it: `measured (CAR)` or `estimated (listRecords)`.
+   No ceiling row; there is no ceiling.
+5. **Legend** — hue per collection, clickable to filter.
+6. **Errors** — the audit tally.
+
+There are no sliders. The rail carries a target, a session, filters, and readouts.
 
 The rail has no drag interaction, so nothing here captures the pointer.
 
@@ -438,7 +507,9 @@ The rail has no drag interaction, so nothing here captures the pointer.
 | Handle does not resolve | Loud message naming the handle. |
 | PDS sends no CORS headers on `/xrpc/` | Keep the current explicit message naming `Access-Control-Allow-Origin`. Fail loudly; do not silently fall back to a public AppView, which would lose the unknown-lexicon coverage that motivates the tool. |
 | Repo is empty | Stated plainly, not drawn as a blank map. |
-| Record ceiling hit | Stats line says so and points at the ceiling field. |
+| `getRepo` unavailable or CORS-blocked | Fall back to exhaustive `listRecords` automatically, and say in the stats line that sizes are now estimated rather than measured. |
+| CAR parse failure | Do not silently fall back to a partial result. Report that the CAR was unreadable, then offer the `listRecords` path explicitly. |
+| Repo exceeds the size threshold | Show real figures and let the user choose (§3.5). Declining is a valid outcome, not an error. |
 | OAuth callback state expired or invalid | "Login session expired or invalid. Please retry." — a clear client-side error, not a blank or a generic failure. |
 | Write scope not granted | Persistent banner; app runs read-only. |
 | `putRecord` / `deleteRecord` fails | Surface the XRPC error verbatim. Leave local state untouched — never optimistically patch a write that failed. |
@@ -459,6 +530,14 @@ The rail has no drag interaction, so nothing here captures the pointer.
   when cells fall below the resolvable size.
 - `atproto/tid.spec.js`, `atproto/audit.spec.js` — existing coverage retained, including
   that scoped auditing does not judge non-Bluesky lexicons by `app.bsky` rules.
+- `atproto/car.spec.js` — parse a small fixture CAR: every record recovered, `bytes` equals
+  the DAG-CBOR block length rather than a JSON re-serialization, `exact` is true, and a
+  truncated or corrupt CAR raises rather than returning a partial repo.
+
+**One regression test worth naming**, because it is the defect that motivated §3: given a
+repo with one collection of 5,000 records and one of 22, the resulting records must reflect
+that ratio. A reader that returns a similar count for both is the bug this spec exists to
+remove.
 
 **Auth is not unit tested.** It is crypto plus redirects plus a third-party server. It gets
 the skill's operational smoke-test checklist, run against production after any auth-related
@@ -480,12 +559,19 @@ deploy:
   Decision stands: fail loudly rather than fall back to an AppView.
 - **`repo:*` scope support.** Recent addition; an older auth server may reject or narrow it.
   Mitigated by scope gating, not by requesting something broader.
-- **DOM node count.** One `div` per record. The stack's 140-tile cap is gone, so the treemap
-  is now the only consumer — and filtering reduces rather than increases node count. If it
-  drags, a canvas renderer is a leaf change behind the data seam.
-- **Large repos.** Ceiling defaults to 4000, accepts up to 12000, 80 pages per collection.
-  Repos in the hundreds of thousands need a different strategy than "read everything", and
-  retaining `value` raises the memory cost of that ceiling.
+- **DOM node count.** One `div` per record, and removing the ceiling means that number is
+  now set by the repo rather than by us. This is the risk most likely to bite first: a
+  200k-record repo is 200k DOM nodes, well past what the current renderer handles. The
+  treemap already aggregates blocks too small to resolve into a single labelled cell, which
+  caps nodes by *area* rather than by record count — that mechanism is now load-bearing and
+  should be verified against a large repo early. If it is not enough, a canvas renderer is
+  a leaf change behind the data seam.
+- **Memory on large repos.** Reading in full and retaining `value` means a large account's
+  records live in the tab. Mitigated by the up-front size warning (§3.5), not by silent
+  truncation. The threshold needs calibrating against a real large repo, not guessed.
+- **CAR endpoint availability.** `getRepo` may be blocked, rate-limited, or CORS-restricted
+  even where `listRecords` works. Hence the fallback — but the fallback yields estimated
+  rather than measured byte sizes, and says so.
 - **`did:web` resolution** is written but still untested.
 - **Deployment path is permanent.** `client_id` is a URL. Moving the app invalidates every
   existing OAuth session.
@@ -502,4 +588,5 @@ deploy:
 | Bulk selection and bulk delete | The strongest feature for actual repo cleanup, and irreversible at scale. Needs a confirmation design of its own. It is the reason a right-hand panel might later exist. |
 | Resolving `clock skew > 24h` | No longer blocks anything now that the stack is gone. Reported, not acted on. |
 | Granular per-collection scopes | Cannot be enumerated in static metadata for unknown lexicons. Revisit if permission sets make dynamic narrowing practical. |
-| Canvas / WebGL renderer | Only if DOM node count actually drags. The data seam makes it a leaf change. |
+| Canvas / WebGL renderer | Deferred, but now the likeliest thing to be forced: removing the ceiling puts node count under the repo's control, not ours. Verify the existing area-based aggregation against a large repo before assuming it holds. The data seam makes the swap a leaf change. |
+| Incremental re-read via `getRepo?since=<rev>` | The CAR endpoint accepts a revision and returns only a diff, so a re-read after edits could be cheap. Not needed while writes patch local state in place (§9). |
