@@ -86,13 +86,23 @@ hr{border:0;border-top:1px solid var(--rule);margin:0}
 /* ---------- stage ---------- */
 #stage{position:relative;overflow:hidden;cursor:grab;background:var(--ground)}
 #stage.drag{cursor:grabbing}
-#scene{position:absolute;inset:0;perspective:2200px;perspective-origin:50% 50%}
+#scene{position:absolute;inset:0;perspective:4000px;perspective-origin:50% 50%}
 #pivot{
   position:absolute;left:50%;top:50%;width:0;height:0;
   transform-style:preserve-3d;
 }
-.tile{position:absolute;transform-style:preserve-3d;will-change:transform}
-.tile .m{position:absolute}
+.tile{position:absolute;transform-style:preserve-3d;will-change:transform;pointer-events:none}
+.tile .m{position:absolute;pointer-events:auto;cursor:pointer}
+.tile.sel{outline:2px solid var(--ink);outline-offset:3px}
+#tip{
+  position:absolute;right:18px;top:104px;width:262px;
+  background:var(--paper);border:1px solid var(--rule);
+  padding:10px 12px;display:flex;flex-direction:column;gap:6px;pointer-events:none;
+}
+#tip .t{font-weight:800;font-size:11px;letter-spacing:.02em;text-transform:uppercase}
+#tip table{font-size:10px}
+#tipcols{display:flex;flex-direction:column;gap:2px;border-top:1px solid var(--rule);padding-top:5px}
+#tip .hint{font-size:9px;letter-spacing:.04em;color:var(--ink-soft);font-style:italic}
 #hud{
   position:absolute;left:18px;bottom:16px;
   font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink-soft);
@@ -109,11 +119,48 @@ hr{border:0;border-top:1px solid var(--rule);margin:0}
 #msg{
   position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
   max-width:400px;text-align:center;font-size:12px;line-height:1.5;
+  /* the portrait behind this can be any colour, so the panel carries its own */
+  background:var(--paper);border:1px solid var(--rule);padding:14px 18px;
 }
 #msg .t{font-weight:800;letter-spacing:-.02em;font-size:15px;margin-bottom:6px;text-transform:uppercase}
 #msg code{font-family:"IBM Plex Mono",monospace;font-size:11px;background:var(--ground-deep);padding:1px 4px}
 .hidden{display:none!important}
+/* ---------- entry: choose how to read the repo ---------- */
+#gate{
+  position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:16px;padding:24px;
+}
+#gate .gh{font-size:11px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-soft)}
+#gate .gcards{display:flex;gap:12px;flex-wrap:wrap;justify-content:center}
+#gate .gc{
+  width:250px;text-align:left;background:var(--paper);color:var(--ink);
+  border:1px solid var(--ink);padding:14px 15px;
+  display:flex;flex-direction:column;gap:7px;text-transform:none;letter-spacing:0;
+}
+#gate .gc:hover{background:var(--ink);color:var(--paper)}
+#gate .gc b{font-size:14px;font-weight:800;letter-spacing:-.02em}
+#gate .gc span{font-family:"Archivo",sans-serif;font-size:11px;font-weight:400;line-height:1.45}
+#gate .gc i{
+  font-family:"IBM Plex Mono",monospace;font-style:normal;font-size:9px;
+  letter-spacing:.14em;text-transform:uppercase;opacity:.6;
+}
+#gate .gn{font-size:10px;color:var(--ink-soft);max-width:520px;text-align:center;line-height:1.5}
 #ctrls{position:absolute;right:18px;bottom:16px;display:flex;gap:6px}
+/* ---------- treemap viewer: same data, orthographic projection ---------- */
+#map{position:absolute;inset:0;overflow:hidden}
+#map .blk{position:absolute;overflow:hidden}
+#map .c{position:absolute;cursor:pointer}
+#map .lb{
+  position:absolute;left:0;top:0;pointer-events:none;
+  font-family:"IBM Plex Mono",monospace;font-size:8.5px;letter-spacing:-.01em;
+  color:var(--ink);background:rgba(239,240,235,.82);padding:1px 3px;
+  white-space:nowrap;max-width:100%;overflow:hidden;
+}
+#mapinfo{
+  position:absolute;left:18px;bottom:16px;pointer-events:none;
+  font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink);
+  background:var(--paper);border:1px solid var(--rule);padding:4px 8px;
+}
 @media (prefers-reduced-motion:reduce){#pivot{transition:none!important}}
 @media (max-width:820px){
   body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
@@ -145,8 +192,8 @@ hr{border:0;border-top:1px solid var(--rule);margin:0}
       <div class="src">defines where one session ends</div>
     </div>
     <div class="param">
-      <div class="top"><span class="nm">Twist gain</span><span class="val" id="v-twist">14°</span></div>
-      <input type="range" id="p-twist" min="0" max="40" step="1" value="14">
+      <div class="top"><span class="nm">Twist gain</span><span class="val" id="v-twist">8°</span></div>
+      <input type="range" id="p-twist" min="0" max="40" step="1" value="8">
       <div class="src">cadence → rotation per tile</div>
     </div>
     <div class="param">
@@ -160,8 +207,8 @@ hr{border:0;border-top:1px solid var(--rule);margin:0}
       <div class="src">how fast the past loses saturation</div>
     </div>
     <div class="param">
-      <div class="top"><span class="nm">Depth limit</span><span class="val" id="v-tiles">140</span></div>
-      <input type="range" id="p-tiles" min="10" max="400" step="10" value="140">
+      <div class="top"><span class="nm">Depth limit</span><span class="val" id="v-tiles">320</span></div>
+      <input type="range" id="p-tiles" min="10" max="400" step="10" value="320">
       <div class="src">most recent sessions drawn</div>
     </div>
     <div class="param">
@@ -192,23 +239,48 @@ hr{border:0;border-top:1px solid var(--rule);margin:0}
 
   <hr>
   <div class="note">
-    Drag to orbit · scroll to zoom · every mark traces to a number in the repo.
+    Drag to orbit · scroll to fly through time · shift+scroll to zoom ·
+    W/S or ↑/↓ thrust, A/D or ←/→ turn, Q/E pitch · hover a mark to read its
+    session, click it to open that record on pdsls.dev ·
+    every mark traces to a number in the repo.
   </div>
 </aside>
 
 <main id="stage">
   <div id="scene"><div id="pivot"></div></div>
-  <div id="state"><div id="state-t">no repo loaded</div><div class="sub" id="state-s">Enter a handle and press Draw.</div></div>
+  <div id="state" class="hidden"><div id="state-t">no repo loaded</div><div class="sub" id="state-s">Enter a handle and press Draw.</div></div>
   <div id="hud" class="hidden">
     <div><div class="big" id="hud-ang">0.0</div><div class="u">view angle °</div></div>
     <div><div class="big" id="hud-ses">0</div><div class="u">sessions</div></div>
     <div><div class="big" id="hud-rec">0</div><div class="u">records</div></div>
+    <div><div class="big" id="hud-at">—</div><div class="u">you are at</div></div>
   </div>
-  <div id="ctrls">
+  <div id="map" class="hidden"></div>
+  <div id="mapinfo" class="hidden"></div>
+  <div id="ctrls" class="hidden">
+    <button id="mode" class="ghost">Treemap</button>
+    <button id="now" class="ghost">Back to now</button>
     <button id="frontal" class="ghost">Frontal view</button>
     <button id="oblique" class="ghost">Oblique</button>
   </div>
-  <div id="msg"></div>
+  <div id="tip" class="hidden"></div>
+  <div id="gate">
+    <div class="gh">two ways to read a repo</div>
+    <div class="gcards">
+      <button class="gc" data-v="stack">
+        <b>Stills &amp; Frames</b>
+        <span>Sessions stacked in time. Fly through the gaps between them.</span>
+        <i>portrait</i>
+      </button>
+      <button class="gc" data-v="map">
+        <b>Perspective</b>
+        <span>Every record one cell, nested by lexicon, sized by count.</span>
+        <i>survey</i>
+      </button>
+    </div>
+    <div class="gn">Reads every collection in any repo, public data only, straight from the PDS. Handle at left.</div>
+  </div>
+  <div id="msg" class="hidden"></div>
 </main>
 
 <script>
@@ -250,25 +322,36 @@ const ENC=new TextEncoder();
 function audit(col,rkey,val,tid){
   const e=[];
   if(!val||typeof val!=="object"){e.push("empty value");return e;}
+  /* ---- rules that hold for ANY atproto record, whatever the lexicon ---- */
   if(val.$type&&val.$type!==col)e.push("$type ≠ collection");
   const claimed=val.createdAt!=null?Date.parse(val.createdAt):null;
   if(val.createdAt!=null&&Number.isNaN(claimed))e.push("unparseable createdAt");
   else if(claimed!=null&&claimed>Date.now()+36e5)e.push("createdAt in the future");
   else if(claimed!=null&&tid!=null&&Math.abs(tid-claimed)>864e5)e.push("clock skew > 24h");
-  if(val.createdAt==null&&rkey!=="self")e.push("no createdAt");
-  if(typeof val.text==="string"){
-    if([...val.text].length>300)e.push("text over 300 graphemes");
-    if(Array.isArray(val.facets)){
-      const len=ENC.encode(val.text).length;
-      for(const f of val.facets){
-        const i=f&&f.index||{};
-        if(!(i.byteStart>=0)||!(i.byteEnd<=len)||i.byteStart>i.byteEnd){e.push("facet byte range outside text");break;}
-      }
+  /* facets index byte offsets into their own text: broken in any lexicon */
+  if(typeof val.text==="string"&&Array.isArray(val.facets)){
+    const len=ENC.encode(val.text).length;
+    for(const f of val.facets){
+      const i=f&&f.index||{};
+      if(!(i.byteStart>=0)||!(i.byteEnd<=len)||i.byteStart>i.byteEnd){e.push("facet byte range outside text");break;}
     }
   }
   const imgs=val.embed&&val.embed.images;
   if(Array.isArray(imgs)&&imgs.some(im=>!im||!im.image||!im.image.mimeType))e.push("blob without mimeType");
-  if(val.reply&&!(val.reply.root&&val.reply.parent))e.push("reply missing root or parent");
+  /* ---- rules a specific lexicon defines, applied only where it governs.
+     A required top-level createdAt, the 300-grapheme ceiling and the
+     reply root/parent pair are app.bsky's contract. Other lexicons never
+     agreed to them: site.standard.document is a long document by design,
+     and my.skylights.rel keeps its timestamps inside sub-objects. Judging
+     them by Bluesky's schema draws a tear where the auditor is wrong, not
+     where the data is. ---- */
+  if(col.startsWith("app.bsky.")){
+    if(val.createdAt==null&&rkey!=="self")e.push("no createdAt");
+    if(col==="app.bsky.feed.post"){
+      if(typeof val.text==="string"&&[...val.text].length>300)e.push("text over 300 graphemes");
+      if(val.reply&&!(val.reply.root&&val.reply.parent))e.push("reply missing root or parent");
+    }
+  }
   return e;
 }
 
@@ -280,29 +363,47 @@ async function readRepo(input,cap,ac,onProgress){
   const cols=(desc.collections||[]).slice().sort();
   if(!cols.length)throw new Error("Repo is empty — no collections to read.");
   const recs=[],errorTally=new Map();
-  outer:
-  for(const col of cols){
-    let cursor=null;
-    for(let page=0;page<80;page++){
-      const u=pds+"/xrpc/com.atproto.repo.listRecords?repo="+encodeURIComponent(did)+
-        "&collection="+encodeURIComponent(col)+"&limit=100"+(cursor?"&cursor="+encodeURIComponent(cursor):"");
-      const j=await jget(u,ac);
-      for(const r of (j.records||[])){
-        const rkey=String(r.uri).split("/").pop();
-        const tid=tidToMs(rkey);
-        const claimed=r.value&&r.value.createdAt?Date.parse(r.value.createdAt):NaN;
-        const ts=tid!=null?tid:(Number.isFinite(claimed)?claimed:null);
-        if(ts==null)continue;
-        const errs=audit(col,rkey,r.value,tid);
-        errs.forEach(x=>errorTally.set(x,(errorTally.get(x)||0)+1));
-        recs.push({col,ts,errs:errs.length});
-      }
-      onProgress(recs.length+" records · "+col.split(".").slice(-1)[0]);
-      cursor=j.cursor;
-      if(!cursor||recs.length>=cap)break;
-      if(recs.length>=cap)break outer;
+  /* Fair reading: a sequential scan lets one huge collection (likes…) eat the
+     whole ceiling before the rest are touched. Instead:
+     pass 1 samples EVERY collection with a small page, so each one is present;
+     pass 2 round-robins full pages among the unfinished until the cap. */
+  const state=cols.map(col=>({col,cursor:null,done:false}));
+  const firstLimit=Math.max(10,Math.min(100,Math.ceil(cap/cols.length)));
+  async function fetchPage(st,limit){
+    const u=pds+"/xrpc/com.atproto.repo.listRecords?repo="+encodeURIComponent(did)+
+      "&collection="+encodeURIComponent(st.col)+"&limit="+limit+
+      (st.cursor?"&cursor="+encodeURIComponent(st.cursor):"");
+    const j=await jget(u,ac);
+    for(const r of (j.records||[])){
+      const rkey=String(r.uri).split("/").pop();
+      const tid=tidToMs(rkey);
+      const claimed=r.value&&r.value.createdAt?Date.parse(r.value.createdAt):NaN;
+      const ts=tid!=null?tid:(Number.isFinite(claimed)?claimed:null);
+      if(ts==null)continue;
+      const errs=audit(st.col,rkey,r.value,tid);
+      errs.forEach(x=>errorTally.set(x,(errorTally.get(x)||0)+1));
+      recs.push({col:st.col,ts,errs:errs.length,errNames:errs,rkey});
     }
-    if(recs.length>=cap)break;
+    st.cursor=j.cursor||null;
+    if(!st.cursor)st.done=true;
+  }
+  let next=0;
+  await Promise.all(Array.from({length:6},async()=>{
+    while(true){
+      const i=next++;
+      if(i>=state.length||recs.length>=cap)return;
+      await fetchPage(state[i],firstLimit);
+      onProgress(recs.length+" records · sampled "+Math.min(i+1,state.length)+"/"+state.length+" collections");
+    }
+  }));
+  let rounds=0;
+  while(recs.length<cap&&state.some(s=>!s.done)&&rounds<80){
+    for(const st of state){
+      if(st.done||recs.length>=cap)continue;
+      await fetchPage(st,100);
+      onProgress(recs.length+" records · deepening "+st.col.split(".").slice(-1)[0]);
+    }
+    rounds++;
   }
   recs.sort((a,b)=>a.ts-b.ts);
   return {did,pds,collections:cols,records:recs,errorTally};
@@ -348,9 +449,14 @@ function sessionize(recs,gapMs){
 
 /* ============ state ============ */
 let DATA=null, CELLS=null, HUES=null, SESSIONS=null, ac=null;
-let ax=-24, ay=32, zoom=1;
-const P={gap:90,twist:14,depth:28,decay:70,tiles:140,cap:4000};
+let ax=-24, ay=32, zoom=1, STACK_DEPTH=0, userZoomed=false;
+const P={gap:90,twist:8,depth:28,decay:70,tiles:320,cap:4000};
 const PLATE=460;
+/* ---- camera: CAM is the z of the plate plane sitting on the pivot origin.
+   Decreasing CAM travels forward, into the past. Plates that come nearer than
+   NEAR_FADE have been flown past, and fade out rather than blowing up. ---- */
+const PERSP=4000, NEAR_FADE=350, NEAR_HIDE=900, CAM_HOME=300;
+let CAM=CAM_HOME, camAuto=true, TILES=[], HOVER=null, FOCUS=null;
 
 function fmt(n){return n>=1e4?(n/1e3).toFixed(1)+"k":String(n)}
 function setStatus(t){$("#s-status").textContent=t}
@@ -376,14 +482,22 @@ function build(){
   const silences=shown.map(s=>s.silence);
   const smax=Math.max(...silences,1);
 
-  pivot.innerHTML="";
-  let z=0,twist=0;
+  pivot.innerHTML="";TILES=[];HOVER=null;
+  /* twist accumulates forward through time; depth is measured backwards from
+     now, so the newest plate sits where the viewer stands and the past
+     recedes away from them. Separation between two plates is the silence
+     that actually lay between those two sessions. */
+  const twists=[];let tw=0;
+  for(let i=0;i<shown.length;i++){tw+=(cad[i]/cmax)*P.twist;twists.push(tw);}
+  const zs=new Array(shown.length);
+  for(let i=shown.length-1,zz=0;i>=0;i--){
+    zs[i]=zz;
+    zz-=(6+Math.pow(silences[i]/smax,0.45)*P.depth);
+  }
   shown.forEach((s,i)=>{
     const age=(newest-s.start)/span;                 // 0 = now, 1 = oldest shown
     const life=Math.pow(1-age,1+decay*3);            // recency weight
-    const cadN=cad[i]/cmax;
-    twist+=cadN*P.twist;                             // helix: twist accumulates
-    z-= (6+Math.pow(silences[i]/smax,0.45)*P.depth); // silence becomes distance
+    const z=zs[i], twist=twists[i];
 
     const tile=document.createElement("div");
     tile.className="tile";
@@ -393,8 +507,11 @@ function build(){
     tile.style.opacity=(0.12+0.88*life).toFixed(3);
 
     /* per-collection share within this session */
-    const local=new Map();
-    for(const r of s.items) local.set(r.col,(local.get(r.col)||0)+1);
+    const local=new Map(),firstKey=new Map();
+    for(const r of s.items){
+      local.set(r.col,(local.get(r.col)||0)+1);
+      if(!firstKey.has(r.col))firstKey.set(r.col,r.rkey);
+    }
     const n=s.items.length;
     const frag=document.createDocumentFragment();
 
@@ -405,6 +522,8 @@ function build(){
       const w=c.w*PLATE*fill, hh=c.h*PLATE*fill;
       const d=document.createElement("div");
       d.className="m";
+      d.dataset.col=col;d.dataset.count=count;
+      d.dataset.rkey=firstKey.get(col)||"";
       d.style.left=((c.x+c.w/2)*PLATE-w/2)+"px";
       d.style.top=((c.y+c.h/2)*PLATE-hh/2)+"px";
       d.style.width=w+"px";d.style.height=hh+"px";
@@ -427,6 +546,8 @@ function build(){
         const f=(t+0.5)/steps;
         const q=document.createElement("div");
         q.className="m";
+        q.dataset.from=a.col;q.dataset.to=b.col;
+        q.dataset.col=b.col;q.dataset.rkey=b.rkey||"";  /* the record arrived at */
         q.style.left=(x1+(x2-x1)*f-sz/2)+"px";
         q.style.top=(y1+(y2-y1)*f-sz/2)+"px";
         q.style.width=q.style.height=sz+"px";
@@ -445,6 +566,8 @@ function build(){
       ["#00E5FF","#FF00A8","#FFE500"].forEach((ch,j)=>{
         const g=document.createElement("div");
         g.className="m";
+        g.dataset.err=(r.errNames||[]).join(", ")||"invalid record";
+        g.dataset.col=r.col;g.dataset.rkey=r.rkey||"";
         const sz=Math.min(c.w,c.h)*PLATE*0.34;
         g.style.left=((c.x+c.w/2)*PLATE-sz/2+(j-1)*off)+"px";
         g.style.top=((c.y+c.h/2)*PLATE-sz/2-(j-1)*off*0.6)+"px";
@@ -458,11 +581,20 @@ function build(){
 
     tile.appendChild(frag);
     pivot.appendChild(tile);
+    TILES.push({el:tile,z,op:0.12+0.88*life,ses:s,
+      n:shown.length-i,of:shown.length,
+      cadence:cad[i],errs:s.items.reduce((a,r)=>a+(r.errs?1:0),0),local});
   });
+  STACK_DEPTH=zs.length?zs[0]:0; /* deepest plate = oldest shown session */
+  if(!userZoomed)zoom=fitZoom();
+  /* home position: standing just in front of the newest session, looking back */
+  if(camAuto)CAM=CAM_HOME;
+  CAM=Math.max(STACK_DEPTH-600,Math.min(600,CAM));
 
   /* readouts */
   const errs=DATA.records.reduce((s,r)=>s+(r.errs?1:0),0);
   $("#stats").innerHTML=`<tbody>
+    <tr><td class="k">status</td><td class="v" id="s-status">drawn</td></tr>
     <tr><td class="k">pds</td><td class="v">${new URL(DATA.pds).host}</td></tr>
     <tr><td class="k">collections</td><td class="v">${DATA.collections.length}</td></tr>
     <tr><td class="k">records read</td><td class="v">${fmt(DATA.records.length)}</td></tr>
@@ -497,28 +629,212 @@ function drawLegend(){
 }
 
 /* ---- orbit ---- */
+/* size the plate you are standing at; the recession behind it fills the rest,
+   and the far tail may bleed off-frame — the frame is one still of the passage */
+function fitZoom(){
+  return Math.max(0.25,Math.min(1.2,0.26*(stage.clientWidth||1200)/PLATE));
+}
+window.addEventListener("resize",()=>{
+  if(MODE==="map"){buildMap();return;}
+  if(!userZoomed&&DATA){zoom=fitZoom();render();}
+});
 function render(){
-  pivot.style.transform=`scale(${zoom}) rotateX(${ax}deg) rotateY(${ay}deg)`;
+  /* translateZ after the rotations = along the stack's own axis, so travel
+     runs through the stack whatever the orbit angle */
+  pivot.style.transform=`scale(${zoom}) rotateX(${ax}deg) rotateY(${ay}deg) translateZ(${(-CAM).toFixed(1)}px)`;
+  /* plates flown past fade instead of blowing up; the nearest one still
+     in front of us is where we are in time */
+  let focus=null,fz=Infinity;
+  for(const t of TILES){
+    const zp=t.z-CAM;
+    const f=zp>NEAR_FADE?Math.max(0,1-(zp-NEAR_FADE)/(NEAR_HIDE-NEAR_FADE)):1;
+    const vis=f>0.02;
+    t.el.style.display=vis?"":"none";
+    t.el.style.opacity=(t.op*f).toFixed(3);
+    t.el.style.pointerEvents=vis&&t.op*f>0.12?"":"none";
+    /* where we are = the visible plate nearest the plane we are standing on */
+    const d=Math.abs(zp+CAM_HOME);
+    if(vis&&d<fz){fz=d;focus=t;}
+  }
+  if(focus!==FOCUS){
+    if(FOCUS)FOCUS.el.classList.remove("sel");
+    FOCUS=focus;
+    if(FOCUS)FOCUS.el.classList.add("sel");
+  }
   const mag=Math.hypot(ax,ay);
   $("#hud-ang").textContent=mag.toFixed(1);
+  $("#hud-at").textContent=FOCUS?fmtDate(FOCUS.ses.start).slice(0,7):"—";
   const frontal=mag<1.2;
   $("#state-t").textContent=frontal?"frontal · this is the avatar":"oblique · this is the passage";
   $("#state-s").textContent=frontal
     ? "All of history collapsed into one square. Nothing about time is visible from here."
     : "Depth is silence. Twist is cadence. Each plate is one session.";
+  if(!HOVER)showTip(FOCUS,null);
 }
-let dragging=false,lx=0,ly=0;
-stage.addEventListener("pointerdown",e=>{dragging=true;lx=e.clientX;ly=e.clientY;stage.classList.add("drag");stage.setPointerCapture(e.pointerId);});
+let rafPending=false;
+function queueRender(){
+  if(rafPending)return;
+  rafPending=true;
+  requestAnimationFrame(()=>{rafPending=false;render();});
+}
+
+/* ---- readouts for one plate; every line is a measured quantity ---- */
+function fmtDate(ms){return new Date(ms).toISOString().replace("T"," ").slice(0,16)}
+function fmtDur(ms){
+  const m=ms/6e4;
+  if(m<1)return "<1 min";
+  if(m<90)return Math.round(m)+" min";
+  const h=m/60;
+  if(h<36)return h.toFixed(1)+" h";
+  return (h/24).toFixed(1)+" d";
+}
+function showTip(t,mark){
+  const tip=$("#tip");
+  if(!t){tip.classList.add("hidden");return;}
+  const s=t.ses;
+  const top=[...t.local.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4);
+  let head="";
+  if(mark&&mark.err)
+    head=`<tr><td class="k">torn mark</td><td class="v">${mark.err}</td></tr>`+
+         (mark.rkey?`<tr><td class="k">rkey</td><td class="v">${mark.rkey}</td></tr>`:"");
+  else if(mark&&mark.from)
+    head=`<tr><td class="k">transition</td><td class="v">${mark.from.split(".").pop()} → ${mark.to.split(".").pop()}</td></tr>`;
+  else if(mark&&mark.col)
+    head=`<tr><td class="k">region</td><td class="v">${mark.col}</td></tr>`+
+         `<tr><td class="k">here</td><td class="v">${mark.count} of ${s.items.length} rec</td></tr>`;
+  tip.innerHTML=
+    `<div class="t">plate ${t.n} of ${t.of} · ${mark?"mark":"session"}</div>`+
+    `<table><tbody>${head}`+
+    `<tr><td class="k">began</td><td class="v">${fmtDate(s.start)}</td></tr>`+
+    `<tr><td class="k">lasted</td><td class="v">${fmtDur(s.end-s.start)}</td></tr>`+
+    `<tr><td class="k">records</td><td class="v">${s.items.length}</td></tr>`+
+    `<tr><td class="k">silence before</td><td class="v">${s.silence?fmtDur(s.silence):"—"}</td></tr>`+
+    `<tr><td class="k">cadence</td><td class="v">${t.cadence<0.01
+        ?(t.cadence*60).toFixed(2)+" rec/h"
+        :t.cadence.toFixed(2)+" rec/min"}</td></tr>`+
+    `<tr><td class="k">collections</td><td class="v">${t.local.size}</td></tr>`+
+    (t.errs?`<tr><td class="k">invalid</td><td class="v">${t.errs}</td></tr>`:"")+
+    `</tbody></table>`+
+    `<div id="tipcols">${top.map(([c,n])=>
+      `<div class="leg"><i style="background:hsl(${HUES.get(c)} 74% 50%)"></i>`+
+      `<span title="${c}">${c}</span><b>${n}</b></div>`).join("")}</div>`+
+    (mark?`<div class="hint">click → ${mark.rkey?"this record":"this collection"} on pdsls.dev</div>`:"");
+  tip.classList.remove("hidden");
+}
+/* hover: marks are real DOM nodes, so the browser hit-tests the 3D for us */
+pivot.addEventListener("mouseover",e=>{
+  const m=e.target.closest?e.target.closest(".m"):null;
+  if(!m)return;
+  const t=TILES.find(x=>x.el===m.parentNode);
+  if(!t)return;
+  HOVER={t,mark:{col:m.dataset.col,count:+m.dataset.count||0,
+    from:m.dataset.from,to:m.dataset.to,err:m.dataset.err,rkey:m.dataset.rkey}};
+  showTip(t,HOVER.mark);
+});
+stage.addEventListener("mouseleave",()=>{HOVER=null;showTip(FOCUS,null);});
+let dragging=false,lx=0,ly=0,pressMark=null,pressX=0,pressY=0,dragMoved=false;
+stage.addEventListener("pointerdown",e=>{
+  /* never capture a press aimed at the overlay controls: pointer capture
+     retargets the pointerup to the stage, so the button's click never fires */
+  if(e.target.closest("#ctrls,button"))return;
+  pressMark=e.target.closest?e.target.closest(".m"):null;
+  pressX=e.clientX;pressY=e.clientY;dragMoved=false;
+  dragging=true;lx=e.clientX;ly=e.clientY;
+  stage.classList.add("drag");stage.setPointerCapture(e.pointerId);
+});
 stage.addEventListener("pointermove",e=>{
   if(!dragging)return;
+  if(Math.hypot(e.clientX-pressX,e.clientY-pressY)>4)dragMoved=true;
   ay+=(e.clientX-lx)*0.35; ax-=(e.clientY-ly)*0.35;
   ax=Math.max(-89,Math.min(89,ax));
-  lx=e.clientX;ly=e.clientY;render();
+  lx=e.clientX;ly=e.clientY;queueRender();
 });
-stage.addEventListener("pointerup",e=>{dragging=false;stage.classList.remove("drag");});
-stage.addEventListener("wheel",e=>{e.preventDefault();zoom=Math.max(0.25,Math.min(3,zoom*(e.deltaY>0?0.92:1.08)));render();},{passive:false});
+stage.addEventListener("pointerup",e=>{
+  dragging=false;stage.classList.remove("drag");
+  /* a press that did not turn into a drag is a tap on that mark. Detected here
+     rather than via click, which capture would have retargeted to the stage. */
+  if(pressMark&&!dragMoved)openMark(pressMark);
+  pressMark=null;
+});
+/* every mark resolves to a real address in the repo it was drawn from */
+function markURL(d){
+  if(!DATA)return null;
+  const base="https://pdsls.dev/at://"+DATA.did;
+  if(!d||!d.col)return base;
+  return d.rkey?`${base}/${d.col}/${d.rkey}`:`${base}/${d.col}`;
+}
+function openMark(m){
+  const url=markURL({col:m.dataset.col,rkey:m.dataset.rkey});
+  if(!url)return;
+  /* navigate via a synthetic link, not window.open: passing a features string
+     makes the browser treat it as a popup, which pop-up blockers kill silently */
+  const a=document.createElement("a");
+  a.href=url;a.target="_blank";a.rel="noopener noreferrer";
+  document.body.appendChild(a);a.click();a.remove();
+}
+/* ---- flight ----
+   Travel carries velocity and damping rather than jumping a fixed step, so
+   moving through the stack glides and coasts. The loop runs only while
+   something is still in motion, then parks itself. */
+function step(){return Math.max(20,Math.min(120,Math.abs(STACK_DEPTH)/80))}
+function travel(dz){
+  camAuto=false;
+  const lo=STACK_DEPTH-600,hi=600,want=CAM+dz;
+  CAM=Math.max(lo,Math.min(hi,want));
+  if(CAM!==want)FLY.vel=0;   /* hit an end: stop coasting into the wall */
+}
+const FLY={vel:0,yaw:0,pitch:0,zvel:0}, held=new Set(), DAMP=0.90;
+const FLY_KEYS=["w","a","s","d","q","e","arrowup","arrowdown","arrowleft","arrowright"];
+function flightStep(dt){
+  const fwd =(held.has("w")||held.has("arrowup")?1:0)-(held.has("s")||held.has("arrowdown")?1:0);
+  const turn=(held.has("d")||held.has("arrowright")?1:0)-(held.has("a")||held.has("arrowleft")?1:0);
+  const tilt=(held.has("e")?1:0)-(held.has("q")?1:0);
+  FLY.vel  -= fwd*step()*150*dt;   /* forward = deeper = CAM decreasing */
+  FLY.yaw  += turn*260*dt;
+  FLY.pitch+= tilt*260*dt;
+  const k=Math.pow(DAMP,dt*60);
+  FLY.vel*=k;FLY.yaw*=k;FLY.pitch*=k;FLY.zvel*=k;
+  if(Math.abs(FLY.vel)>0.5)travel(FLY.vel*dt);
+  if(Math.abs(FLY.yaw)>0.02)ay+=FLY.yaw*dt;
+  if(Math.abs(FLY.pitch)>0.02)ax=Math.max(-89,Math.min(89,ax+FLY.pitch*dt));
+  if(Math.abs(FLY.zvel)>0.002){
+    userZoomed=true;
+    zoom=Math.max(0.15,Math.min(4,zoom*(1+FLY.zvel*dt)));
+  }
+  return !!(fwd||turn||tilt)||Math.abs(FLY.vel)>0.5||Math.abs(FLY.yaw)>0.02
+    ||Math.abs(FLY.pitch)>0.02||Math.abs(FLY.zvel)>0.002;
+}
+let flying=false,lastT=0;
+function flightLoop(t){
+  const dt=lastT?Math.min((t-lastT)/1000,0.05):1/60;
+  lastT=t;
+  const alive=flightStep(dt);
+  render();
+  if(alive&&!document.hidden)requestAnimationFrame(flightLoop);
+  else{flying=false;lastT=0;}
+}
+function kick(){
+  if(document.hidden){flightStep(1/60);render();return;} /* rAF is suspended */
+  if(!flying){flying=true;lastT=0;requestAnimationFrame(flightLoop);}
+}
+stage.addEventListener("wheel",e=>{
+  e.preventDefault();
+  if(e.shiftKey)FLY.zvel-=e.deltaY*0.02;      /* shift+wheel = zoom */
+  else FLY.vel-=e.deltaY*step()*0.25;         /* wheel = thrust through time */
+  kick();
+},{passive:false});
+addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT")return;
+  const k=e.key.toLowerCase();
+  if(!FLY_KEYS.includes(k))return;
+  e.preventDefault();held.add(k);kick();
+});
+addEventListener("keyup",e=>{held.delete(e.key.toLowerCase());});
+addEventListener("blur",()=>held.clear());
 function glide(tx,ty){
-  const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches;
+  /* rAF is suspended in a hidden or power-throttled tab; without this the
+     eased path would stall at its first frame and the view never arrives */
+  const reduce=matchMedia("(prefers-reduced-motion:reduce)").matches||document.hidden;
   if(reduce){ax=tx;ay=ty;render();return;}
   const sx=ax,sy=ay,t0=performance.now();
   (function step(t){
@@ -529,19 +845,200 @@ function glide(tx,ty){
 }
 $("#frontal").onclick=()=>glide(0,0);
 $("#oblique").onclick=()=>glide(-24,32);
+$("#now").onclick=()=>{CAM=CAM_HOME;camAuto=true;userZoomed=false;zoom=fitZoom();render();};
 
 /* ---- params ---- */
+const PARAM_UI={};
 const bind=(id,key,fmtv,rebuild)=>{
   const el=$("#p-"+id),out=$("#v-"+id);
   const upd=()=>{P[key]=+el.value;out.textContent=fmtv(+el.value);if(rebuild&&DATA)build();};
   el.addEventListener("input",upd);upd();
+  PARAM_UI[key]={el,out,fmtv};
 };
+/* set a param from code without triggering a rebuild */
+function setParam(key,v){
+  const u=PARAM_UI[key];
+  u.el.value=v;P[key]=+u.el.value;u.out.textContent=u.fmtv(+u.el.value);
+}
 bind("gap","gap",v=>v>=60?(v/60).toFixed(1)+" h":v+" min",true);
 bind("twist","twist",v=>v+"°",true);
 bind("depth","depth",v=>String(v),true);
 bind("decay","decay",v=>(v/100).toFixed(2),true);
 bind("tiles","tiles",v=>String(v),true);
 bind("cap","cap",v=>fmt(v),false);
+
+/* ============ alternate viewer: the repo as a treemap ============
+   Same read, same hue assignment, same addresses — only the projection
+   differs. Nesting follows the NSID itself (app → bsky → feed → like), so
+   the namespaces a repo actually dwells in become visible blocks. Area is
+   record count; one cell is one record, oldest to newest within its block. */
+function nsidTree(counts){
+  const root={seg:"",kids:new Map(),n:0,nsid:null};
+  for(const [nsid,n] of counts){
+    root.n+=n;
+    let node=root;
+    const segs=nsid.split(".");
+    segs.forEach((s,i)=>{
+      if(!node.kids.has(s))node.kids.set(s,{seg:s,kids:new Map(),n:0,nsid:null});
+      node=node.kids.get(s);node.n+=n;
+      if(i===segs.length-1)node.nsid=nsid;
+    });
+  }
+  return root;
+}
+/* squarified treemap (Bruls/Huizing/van Wijk): grow a row while the worst
+   aspect ratio keeps improving. Slice-and-dice would give the long tail of
+   one-record collections unreadable slivers; this keeps blocks chunky. */
+function squarify(items,x,y,w,h,out){
+  let i=0;
+  while(i<items.length&&w>0&&h>0){
+    let remain=0;
+    for(let k=i;k<items.length;k++)remain+=items[k].n;
+    if(remain<=0)break;
+    const short=Math.min(w,h), scale=(w*h)/remain;
+    let sum=0,best=Infinity,j=i;
+    for(let k=i;k<items.length;k++){
+      const s=sum+items[k].n, len=s*scale/short;
+      let worst=0;
+      for(let m=i;m<=k;m++){
+        const side=items[m].n*scale/len;
+        if(side>0&&len>0)worst=Math.max(worst,Math.max(len/side,side/len));
+      }
+      if(worst>best&&k>i)break;
+      best=worst;sum=s;j=k;
+    }
+    const len=sum*scale/short;
+    let off=0;
+    for(let m=i;m<=j;m++){
+      const side=items[m].n*scale/len;
+      if(w>=h)out.push({node:items[m].node,x,y:y+off,w:len,h:side});
+      else out.push({node:items[m].node,x:x+off,y,w:side,h:len});
+      off+=side;
+    }
+    if(w>=h){x+=len;w-=len;}else{y+=len;h-=len;}
+    i=j+1;
+  }
+}
+function layoutTree(node,x,y,w,h,depth,out){
+  const kids=[...node.kids.values()];
+  /* a collection can also be a parent (…beacon and …beacon.like): its own
+     records become a sibling leaf rather than vanishing into the block */
+  if(node.nsid){
+    const own=node.n-kids.reduce((s,k)=>s+k.n,0);
+    if(own>0)kids.push({seg:node.seg,kids:new Map(),n:own,nsid:node.nsid});
+  }
+  if(!kids.length){out.push({node,x,y,w,h});return;}
+  kids.sort((a,b)=>b.n-a.n||String(a.seg).localeCompare(String(b.seg)));
+  const rects=[];
+  squarify(kids.map(k=>({n:k.n,node:k})),x,y,w,h,rects);
+  for(const R of rects){
+    const p=Math.min(2,Math.min(R.w,R.h)/8);
+    const ix=R.x+p, iy=R.y+p, iw=Math.max(0,R.w-2*p), ih=Math.max(0,R.h-2*p);
+    if(R.node.kids.size)layoutTree(R.node,ix,iy,iw,ih,depth+1,out);
+    else out.push({node:R.node,x:ix,y:iy,w:iw,h:ih});
+  }
+}
+function buildMap(){
+  const el=$("#map");
+  el.innerHTML="";
+  if(!DATA||!DATA.records.length)return;
+  const counts=new Map(),byCol=new Map();
+  for(const r of DATA.records){
+    counts.set(r.col,(counts.get(r.col)||0)+1);
+    if(!byCol.has(r.col))byCol.set(r.col,[]);
+    byCol.get(r.col).push(r);
+  }
+  for(const a of byCol.values())a.sort((p,q)=>p.ts-q.ts);
+  /* never lay out into a collapsed container: it would silently aggregate
+     everything into "too small to resolve". Resize rebuilds at true size. */
+  const W=Math.max(el.clientWidth,700),H=Math.max(el.clientHeight,460);
+  const leaves=[];
+  layoutTree(nsidTree(counts),0,0,W,H,0,leaves);
+  const newest=DATA.records[DATA.records.length-1].ts;
+  const span=Math.max(newest-DATA.records[0].ts,1);
+  const frag=document.createDocumentFragment();
+  let cells=0,aggregated=0;
+  for(const L of leaves){
+    if(L.w<1||L.h<1)continue;
+    const nsid=L.node.nsid,hue=HUES.get(nsid),recs=byCol.get(nsid)||[],n=recs.length;
+    const box=document.createElement("div");
+    box.className="blk";
+    box.style.cssText=`left:${L.x}px;top:${L.y}px;width:${L.w}px;height:${L.h}px`;
+    const cols=Math.max(1,Math.round(Math.sqrt(n*L.w/Math.max(L.h,1))));
+    const rows=Math.max(1,Math.ceil(n/cols));
+    const cw=L.w/cols,ch=L.h/rows;
+    if(n&&cw>=2.5&&ch>=2.5){
+      recs.forEach((r,i)=>{
+        const age=(newest-r.ts)/span;
+        const c=document.createElement("div");
+        c.className="c";
+        c.dataset.col=r.col;c.dataset.rkey=r.rkey||"";c.dataset.ts=r.ts;
+        if(r.errs)c.dataset.err=(r.errNames||[]).join(", ");
+        c.style.cssText=`left:${(i%cols)*cw}px;top:${Math.floor(i/cols)*ch}px;`+
+          `width:${Math.max(1,cw-1)}px;height:${Math.max(1,ch-1)}px;`+
+          `background:hsl(${hue} ${(20+70*(1-age)).toFixed(0)}% ${(44+18*age).toFixed(0)}%)`;
+        box.appendChild(c);cells++;
+      });
+    }else if(n){
+      /* too small to resolve one record per cell: state that, do not fake it */
+      box.classList.add("c");
+      box.dataset.col=nsid;box.dataset.rkey=recs[recs.length-1].rkey||"";
+      box.dataset.agg=n;
+      box.style.background=`hsl(${hue} 58% 52%)`;
+      aggregated++;
+    }
+    if(L.w>54&&L.h>15&&nsid){
+      const lb=document.createElement("span");
+      lb.className="lb";
+      lb.textContent=nsid.split(".").slice(-2).join(".")+" · "+n;
+      box.appendChild(lb);
+    }
+    frag.appendChild(box);
+  }
+  el.appendChild(frag);
+  $("#mapinfo").textContent=
+    `${leaves.length} collections · ${fmt(DATA.records.length)} records · `+
+    `${fmt(cells)} cells = one record each`+
+    (aggregated?` · ${aggregated} blocks too small to resolve, shown whole`:"");
+}
+function showMapTip(d){
+  const tip=$("#tip"),ts=+d.ts||0;
+  tip.innerHTML=`<div class="t">${d.agg?"collection":"record"}</div><table><tbody>`+
+    `<tr><td class="k">collection</td><td class="v">${d.col}</td></tr>`+
+    (d.agg?`<tr><td class="k">records</td><td class="v">${d.agg}</td></tr>`:"")+
+    (d.rkey?`<tr><td class="k">rkey</td><td class="v">${d.rkey}</td></tr>`:"")+
+    (ts?`<tr><td class="k">timestamp</td><td class="v">${fmtDate(ts)}</td></tr>`:"")+
+    (d.err?`<tr><td class="k">invalid</td><td class="v">${d.err}</td></tr>`:"")+
+    `</tbody></table>`+
+    `<div class="hint">click → ${d.agg?"newest record":"this record"} on pdsls.dev</div>`;
+  tip.classList.remove("hidden");
+}
+$("#map").addEventListener("mouseover",e=>{
+  const c=e.target.closest?e.target.closest(".c"):null;
+  if(c)showMapTip(c.dataset);
+});
+$("#map").addEventListener("click",e=>{
+  const c=e.target.closest?e.target.closest(".c"):null;
+  if(c)openMark(c);
+});
+let MODE="stack";
+function setMode(m){
+  if(m==="map"&&!DATA)return;
+  MODE=m;
+  const map=m==="map";
+  $("#ctrls").classList.remove("hidden");   /* chrome appears with the portrait */
+  $("#scene").classList.toggle("hidden",map);
+  $("#map").classList.toggle("hidden",!map);
+  $("#mapinfo").classList.toggle("hidden",!map);
+  $("#hud").classList.toggle("hidden",map||!DATA);
+  $("#state").classList.toggle("hidden",map);
+  ["now","frontal","oblique"].forEach(id=>$("#"+id).classList.toggle("hidden",map));
+  $("#mode").textContent=map?"Stack":"Treemap";
+  stage.style.cursor=map?"default":"grab";
+  $("#tip").classList.add("hidden");   /* stale readout from the other viewer */
+  if(map)buildMap();else render();
+}
+$("#mode").onclick=()=>{setMode(MODE==="stack"?"map":"stack");writeHash();};
 
 /* ---- load ---- */
 async function load(){
@@ -550,7 +1047,9 @@ async function load(){
   const my=ac;
   $("#load").disabled=true;$("#stop").disabled=false;
   showMsg("reading","<div class=note>Resolving identity…</div>");
-  pivot.innerHTML="";$("#hud").classList.add("hidden");
+  $("#gate").classList.add("hidden");
+  pivot.innerHTML="";$("#hud").classList.add("hidden");$("#tip").classList.add("hidden");
+  userZoomed=false;camAuto=true;TILES=[];HOVER=null;FOCUS=null;
   try{
     const d=await readRepo($("#handle").value,P.cap,my,t=>{
       setStatus(t);
@@ -561,16 +1060,21 @@ async function load(){
     const shares=new Map();
     for(const r of d.records)shares.set(r.col,(shares.get(r.col)||0)+1);
     CELLS=partition(shares); HUES=hues([...shares.keys()]);
-    /* adaptive silence threshold from the actual gap distribution */
+    /* adaptive silence threshold: the smallest gap that lets the whole
+       history fit inside the depth limit — so the default portrait shows
+       the full life, not just the newest slice. Clamped to session sanity. */
     const gaps=[];for(let i=1;i<d.records.length;i++)gaps.push(d.records[i].ts-d.records[i-1].ts);
     if(gaps.length){
       gaps.sort((a,b)=>a-b);
       const med=gaps[gaps.length>>1]||6e5;
-      const sug=Math.round(Math.min(720,Math.max(15,med*10/6e4))/5)*5;
-      $("#p-gap").value=sug;$("#p-gap").dispatchEvent(new Event("input"));
+      const fit=gaps.length>=P.tiles?gaps[gaps.length-P.tiles]:med*10;
+      const sug=Math.round(Math.min(720,Math.max(15,fit/6e4))/5)*5;
+      setParam("gap",sug);
     }
     setStatus("drawn");
-    drawLegend(); build(); showMsg(null);
+    drawLegend(); build();
+    const m=PENDING_MODE||MODE; PENDING_MODE=null; setMode(m);
+    showMsg(null); writeHash();
   }catch(err){
     if(my.signal.aborted){setStatus("stopped");showMsg("stopped","<div class=note>Reading cancelled.</div>");return;}
     setStatus("failed");
@@ -582,8 +1086,27 @@ async function load(){
 $("#load").onclick=load;
 $("#stop").onclick=()=>{if(ac)ac.abort();};
 $("#handle").addEventListener("keydown",e=>{if(e.key==="Enter")load();});
+
+/* the entry screen is the empty state, not an extra step in front of it */
+document.querySelectorAll("#gate .gc").forEach(b=>{
+  /* the viewer is applied after the draw: setMode("map") needs data to lay out */
+  b.onclick=()=>{PENDING_MODE=b.dataset.v;load();};
+});
+/* viewer + handle live in the hash so either one can be linked to directly */
+function writeHash(){
+  const h=$("#handle").value.trim();
+  history.replaceState(null,"","#v="+MODE+(h?"&h="+encodeURIComponent(h):""));
+}
+function readHash(){
+  const q=new URLSearchParams(location.hash.replace(/^#/,""));
+  const v=q.get("v"),h=q.get("h");
+  if(h)$("#handle").value=h;
+  if(v==="map"||v==="stack")PENDING_MODE=v;
+  return !!h;
+}
+let PENDING_MODE=null;
 render();
-showMsg("no repo loaded","<div class=note>This reads every collection in a repo — including lexicons it has never heard of — and draws the intervals between them. Press Draw.</div>");
+if(readHash())load();
 </script>
 </body>
 </html>
