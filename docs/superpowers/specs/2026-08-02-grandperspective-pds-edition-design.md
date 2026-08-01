@@ -109,8 +109,10 @@ hue stable across reads, so it must be preserved exactly.
   they also record the reasoning behind decisions still live in `read.js` and `audit.js`.
   Deleting them would lose that.
 - `CLAUDE.md` is rewritten to describe this app.
-- A `README.md` credits GrandPerspective by Erwin Bonsma as the influence the name and
-  the treemap interaction come from.
+- A `README.md` states authorship (Alexandre Plennevaux) and credits *GrandPerspective* by
+  Erwin Bonsma as the source of the name and the treemap interaction, noting that the
+  original is GPL-licensed and that this is an independent work rather than a port or an
+  affiliated project. The same credit appears in the interface footer (§13).
 
 ### 2.6 Layout after the strip
 
@@ -128,14 +130,19 @@ src/lib/repo/filter.js          NEW — collection / timeframe / query filtering
 src/lib/repo/treemap.js         nsid nesting + squarified layout
 src/lib/repo/format.js          formatters
 src/lib/repo/urlstate.js        hash round-trip
-src/lib/components/             Gate, Rail, Treemap, Tip, Typeahead, RecordModal, SignIn
+src/lib/repo/hittest.js         NEW — grid spatial index, pointer → record (§4.2)
+src/lib/components/             Gate, Rail, Tip, Typeahead, SignIn
+src/lib/components/Treemap.svelte   canvas renderer, replacing one div per record (§4.2)
+src/lib/components/Firehose.svelte  NEW — the read, streaming (§12)
+src/lib/components/RecordModal.svelte NEW — inspect / edit / delete (§9)
+src/lib/components/Footer.svelte    NEW — credits (§13)
 src/routes/+page.svelte         orchestration only
 static/oauth-client-metadata.json
 ```
 
 **The seam that matters, unchanged:** `treemap.js` and `filter.js` emit plain data — no
-DOM, no CSS. Components render that. This is what keeps the mapping testable and makes a
-future canvas or WebGL renderer a leaf change rather than a rewrite.
+DOM, no CSS. Components render that. It is what makes swapping the DOM renderer for canvas
+(§4.2) a leaf change rather than a rewrite, and it will make a later swap to WebGL the same.
 
 ---
 
@@ -245,15 +252,54 @@ the user's PDS acting as an AppView proxy — a contract non-`bsky.social` deplo
 
 ---
 
-## 4. Treemap
+## 4. Treemap and renderer
 
-Unchanged from the current `treemap.js` and `Treemap.svelte`, which are kept as they are:
-NSID-nested squarified layout, one cell per record, sized by stored bytes or by record
-count, with blocks too small to resolve shown whole and labelled as aggregated rather than
-faked.
+### 4.1 Layout — unchanged
 
-The only change is the input: it receives the filtered record set (§5) rather than all
-records.
+`treemap.js` is kept as it is: NSID-nested squarified layout, one cell per record, sized by
+stored bytes or by record count, with blocks too small to resolve shown whole and labelled
+as aggregated rather than faked. Its input changes — it receives the filtered record set
+(§5) rather than all records — but the algorithm does not.
+
+### 4.2 Renderer — canvas 2D, replacing one `div` per record
+
+`Treemap.svelte` currently renders one `<div>` per block and one `<button>` per record.
+With the ceiling removed (§3) that count is set by the repo rather than by us, so the DOM
+renderer has to go.
+
+**Drawn cells are bounded by screen area, not repo size.** This is the fact that decides
+the technology. `treemap.js` only emits per-record cells when they are at least 2.5×2.5 px,
+aggregating anything smaller into one labelled block. So the ceiling on drawn cells is
+viewport area ÷ 6.25 px² — about 150k at 1200×800, 200k at 1400×900 — no matter whether the
+repo holds 4,000 records or 400,000. Past that point extra records make blocks aggregate
+rather than making cells multiply.
+
+**Decision: canvas 2D**, with WebGL held in reserve.
+
+- The content is axis-aligned, flat-filled rectangles with no transform, no lighting, no
+  per-frame animation. The map is static between interactions and redraws only on filter,
+  resize, or hover — so WebGL's advantage, millions of primitives at 60 fps, buys nothing
+  here.
+- ~200k `fillRect` calls is a one-off cost in the tens of milliseconds, and it drops sharply
+  when cells are batched by fill colour: set `fillStyle` once per (collection hue × age
+  bucket) group rather than once per record, turning ~200k state changes into a few thousand.
+- **three.js is categorically wrong for this** — a 3D scene graph and several hundred KB to
+  draw 2D rectangles, in a project that has no 3D left in it.
+- The data seam holds: `treemap.js` emits plain `{x, y, w, h, color}`, so swapping canvas
+  for WebGL later remains a leaf change, exactly as it was for swapping DOM for canvas.
+
+**What canvas costs, stated honestly:**
+
+- **Hit testing must be hand-rolled.** A uniform grid spatial index over blocks and cells,
+  built once per layout, resolves pointer position to a record in constant time.
+- **Accessibility changes shape.** Today each cell is a `<button aria-label>`. Canvas has no
+  DOM, so per-record screen-reader enumeration is lost — though 200k focusable buttons was
+  never navigable in practice either. Replacement: keyboard traversal across blocks and
+  within a block, the focused cell announced via an `aria-live` region, and the record modal
+  (§9) remains ordinary accessible DOM. This is a real trade, not a free win.
+- **Device pixel ratio must be handled explicitly.** Scale the backing store by `devicePixelRatio`
+  and draw on half-pixel offsets, or every hairline rule blurs — which would undo the visual
+  language in §11 immediately.
 
 **Caution for any later pan/zoom.** There is no drag interaction on the treemap today, so
 this does not bite yet — but a drag handler that captures on every `pointerdown` swallows
@@ -500,7 +546,99 @@ The rail has no drag interaction, so nothing here captures the pointer.
 
 ---
 
-## 11. Error handling
+## 11. Visual language
+
+International Style applied to data: neutral, gridded, unornamented. The image carries
+information or it does not appear.
+
+### 11.1 Prohibited
+
+- **No rounded corners.** `border-radius: 0` everywhere, enforced by a global reset rather
+  than by remembering. The codebase is already almost compliant — the single existing
+  `border-radius` declaration is itself a reset to `0`.
+- **No drop shadows**, no `box-shadow`, no `filter: drop-shadow`. Depth is not a variable in
+  this data.
+- **No gradients.** Flat fills only. A cell's colour encodes collection and age; a gradient
+  would encode nothing while implying something.
+- **No decorative motion.** Transitions may clarify a state change; nothing eases for
+  flourish.
+
+### 11.2 Positive rules
+
+- **Hairlines at device resolution.** 1 px rules that are actually 1 device pixel — hence
+  the DPR handling in §4.2. A blurred rule is the fastest way to make this look accidental.
+- **Grid and alignment.** Left-aligned, consistent baseline, generous whitespace as the
+  separator instead of boxes and borders. Separate with space first, a rule second, a
+  container never.
+- **Typography stays as it is.** Archivo (neo-grotesque, Helvetica/Univers lineage) for
+  labels, IBM Plex Mono for every number. The existing pairing is already correct for this
+  idiom. All measured values are monospace so digits align in columns.
+- **Colour discipline.** Chroma belongs to the data alone — hue identifies a collection,
+  saturation carries recency. All chrome is neutral: paper, ink, rule, ground. No accent
+  colour, no brand colour, no state colour beyond what an error genuinely requires.
+
+### 11.3 One change to the existing palette
+
+`--ground: #f6f8f7` and `--rule: #e2e7e4` are very slightly green — deliberate under the
+old framing, which wanted the portrait "suspended in air". That atmosphere is retired with
+the stack. Move the neutrals to true greys so the only hue on screen comes from the repo.
+
+---
+
+## 12. Loading state — the read, at speed
+
+The read is the longest moment in the app and currently shows a one-line status string.
+Instead it becomes the most data-dense screen in the tool: the records themselves,
+streaming past as they resolve.
+
+**Not an animation of a loading process — the loading process, displayed.** Every line is a
+record that actually arrived. This is the same principle as the map: nothing is drawn that
+does not trace to a number in the repo.
+
+**Composition**
+
+- A monospace column, streaming bottom-up at read speed, one line per record:
+  `14:22:07 · app.bsky.feed.like · 3lkq2v… · 412 B`
+- A live readout beside it: records resolved, bytes read, throughput in records/sec and
+  KB/sec, elapsed time, collections seen.
+- Nothing else. No spinner, no progress bar chrome, no percentage — on the CAR path the
+  byte total is known, so show real bytes against real total rather than an abstraction.
+
+**Per path**
+
+- **CAR (§3.2).** Bytes stream first from the response, so throughput is live from the first
+  chunk. Records begin streaming as the CAR is parsed. Both phases are labelled for what
+  they are: `receiving` then `parsing`.
+- **`listRecords` fallback (§3.3).** Records genuinely arrive page by page, so the column
+  streams naturally. The map still renders only on completion (§3.3) — the firehose is what
+  fills the wait, precisely so that a half-read map never has to be shown.
+
+**Implementation notes**
+
+- Keep at most ~40 lines in the DOM, discarding from the top. The firehose is text and
+  short-lived, so DOM is fine here; it is not the thing §4.2 is about.
+- Throttle to animation frames, not per record. At full speed a CAR parse can resolve
+  thousands of records per frame — render a sampled subset of lines and keep the *counters*
+  exact. The rate readout must be true even when the visible lines are sampled.
+- Respect `prefers-reduced-motion`: hold the counters and the final lines, drop the scroll.
+
+---
+
+## 13. Credits
+
+A single-line footer, always present, in the same neutral register as the rest:
+
+> **GrandPerspective — PDS edition.** Made by Alexandre Plennevaux.
+> Treemap concept and name after *GrandPerspective* by Erwin Bonsma.
+
+Linked to the original project. This is the mitigation for the borrowed-name risk in §15:
+the debt is stated in the interface, not only in a README nobody opens. The README carries
+the same credit at more length, including that GrandPerspective is GPL-licensed and that
+this is an independent work, not a port or an affiliate.
+
+---
+
+## 14. Error handling
 
 | Failure | Behaviour |
 |---|---|
@@ -516,7 +654,7 @@ The rail has no drag interaction, so nothing here captures the pointer.
 
 ---
 
-## 12. Testing
+## 15. Testing
 
 **Unit tests over the pure core**, which is the whole point of the data/render seam:
 
@@ -534,10 +672,18 @@ The rail has no drag interaction, so nothing here captures the pointer.
   the DAG-CBOR block length rather than a JSON re-serialization, `exact` is true, and a
   truncated or corrupt CAR raises rather than returning a partial repo.
 
+- `repo/hittest.spec.js` — pointer coordinates resolve to the correct record, including on
+  cell boundaries and inside aggregated blocks; a point in dead space resolves to nothing.
+  This replaces what the DOM gave for free, so it needs real coverage.
+
 **One regression test worth naming**, because it is the defect that motivated §3: given a
 repo with one collection of 5,000 records and one of 22, the resulting records must reflect
 that ratio. A reader that returns a similar count for both is the bug this spec exists to
 remove.
+
+**Visual rules are checked, not trusted.** A grep-level test asserting no `border-radius`
+other than `0`, no `box-shadow`, and no `gradient` anywhere in `src/` — §11 is a standing
+constraint, and standing constraints decay without a check.
 
 **Auth is not unit tested.** It is crypto plus redirects plus a third-party server. It gets
 the skill's operational smoke-test checklist, run against production after any auth-related
@@ -552,20 +698,23 @@ deploy:
 
 ---
 
-## 13. Known risks
+## 16. Known risks
 
 - **CORS.** Self-hosted PDSs may not send `Access-Control-Allow-Origin` on `/xrpc/`. There
   is a `pds-on-synology` repo on tangled, so the owner may be their own failing case.
   Decision stands: fail loudly rather than fall back to an AppView.
 - **`repo:*` scope support.** Recent addition; an older auth server may reject or narrow it.
   Mitigated by scope gating, not by requesting something broader.
-- **DOM node count.** One `div` per record, and removing the ceiling means that number is
-  now set by the repo rather than by us. This is the risk most likely to bite first: a
-  200k-record repo is 200k DOM nodes, well past what the current renderer handles. The
-  treemap already aggregates blocks too small to resolve into a single labelled cell, which
-  caps nodes by *area* rather than by record count — that mechanism is now load-bearing and
-  should be verified against a large repo early. If it is not enough, a canvas renderer is
-  a leaf change behind the data seam.
+- **Render cost at scale.** Addressed by canvas (§4.2) rather than left open. What remains
+  unverified is the premise underneath it: that `treemap.js`'s 2.5 px aggregation threshold
+  really does bound drawn cells to viewport area ÷ 6.25 px². That arithmetic is sound but
+  has not been measured against a real large repo, and it is now load-bearing for the
+  renderer choice. Measure it early; if it does not hold, WebGL is the escalation and the
+  data seam keeps it cheap.
+- **Hit testing is now ours.** The DOM gave pointer-to-record resolution for free; canvas
+  does not. A bug in `hittest.js` means clicking a cell opens the wrong record — and with a
+  delete button in that modal, wrong-record is not a cosmetic failure. Hence dedicated
+  coverage in §15.
 - **Memory on large repos.** Reading in full and retaining `value` means a large account's
   records live in the tab. Mitigated by the up-front size warning (§3.5), not by silent
   truncation. The threshold needs calibrating against a real large repo, not guessed.
@@ -576,12 +725,15 @@ deploy:
 - **Deployment path is permanent.** `client_id` is a URL. Moving the app invalidates every
   existing OAuth session.
 - **Borrowed name.** GrandPerspective is an existing GPL'd macOS application by Erwin
-  Bonsma. The concept is not ownable and the homage is deliberate, but the name is credited
-  in the README rather than presented as original.
+  Bonsma. The concept is not ownable and the homage is deliberate. Mitigated by §13: the
+  credit sits in the interface footer on every screen, not only in a README, and names the
+  work as independent rather than affiliated. If Bonsma ever objects, the fallback is a
+  rename — which is why §13 keeps the credit textual and the slug decision (§1) reversible
+  at the cost of OAuth sessions only.
 
 ---
 
-## 14. Deferred, with reasons
+## 17. Deferred, with reasons
 
 | Item | Why deferred |
 |---|---|
