@@ -88,6 +88,22 @@ describe('parseRepoCar', () => {
 		const car = await fixtureCar([write('a.b.c', 'self', { $type: 'a.b.c' })]);
 		await expect(parseRepoCar(car.slice(0, Math.floor(car.length / 2)))).rejects.toThrow();
 	});
+
+	// singleton config records ("self" rkey, no createdAt) have no decodable
+	// timestamp at all -- they must survive the walk with ts: null rather than
+	// being dropped, and must not be mistaken for the oldest record in the repo
+	it('keeps a record with no decodable timestamp, and sorts it after dated ones', async () => {
+		const car = await fixtureCar([
+			write('a.b.c', '3lkwkzb3az22s', { $type: 'a.b.c', createdAt: '2026-01-01T00:00:00Z' }),
+			write('app.bsky.actor.profile', 'self', { $type: 'app.bsky.actor.profile' })
+		]);
+		const out = await parseRepoCar(car, { now: NOW });
+
+		expect(out.records).toHaveLength(2);
+		const undated = out.records.find((r) => r.col === 'app.bsky.actor.profile');
+		expect(undated.ts).toBeNull();
+		expect(out.records[out.records.length - 1]).toBe(undated);
+	});
 });
 
 describe('fetchCarBytes', () => {

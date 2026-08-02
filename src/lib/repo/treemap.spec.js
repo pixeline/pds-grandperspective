@@ -44,4 +44,53 @@ describe('buildTreemap', () => {
 		expect(blocks).toEqual([]);
 		expect(cells).toBe(0);
 	});
+
+	// Regression for the span/age bug: newest/oldest must come from a scan of
+	// records that actually carry a timestamp, not from the first/last array
+	// slot. Adding an undated record -- at index 0, where the old code would
+	// have read `records[0].ts` as the "oldest" and coerced null to 0 -- must
+	// not perturb the ages of the dated records at all.
+	it('derives span from timestamped records, unaffected by an undated record at any position', () => {
+		const t0 = Date.parse('2026-01-01T00:00:00Z');
+		const dated = [
+			{ col: 'a.b.c', ts: t0, rkey: 'a.b.c-0', bytes: 100, errs: 0, errNames: [] },
+			{ col: 'a.b.c', ts: t0 + 50000, rkey: 'a.b.c-1', bytes: 100, errs: 0, errNames: [] },
+			{ col: 'a.b.c', ts: t0 + 100000, rkey: 'a.b.c-2', bytes: 100, errs: 0, errNames: [] }
+		];
+		const undated = { col: 'a.b.undated', ts: null, rkey: 'self', bytes: 40, errs: 0, errNames: [] };
+
+		// a fixed hueOf shared by both runs isolates the comparison to the
+		// span/age computation, rather than letting the extra collection shift
+		// golden-angle hue assignment for 'a.b.c'
+		const hueOf = new Map([
+			['a.b.c', 0],
+			['a.b.undated', 180]
+		]);
+
+		const cellsFor = (records) => {
+			const { blocks } = buildTreemap(records, { w: 400, h: 400, weigh: 'records', hueOf });
+			return blocks
+				.find((b) => b.nsid === 'a.b.c')
+				.cells.slice()
+				.sort((a, b) => a.rkey.localeCompare(b.rkey));
+		};
+
+		const withoutUndated = cellsFor(dated);
+		// undated placed first, the position the old buggy code read as "oldest"
+		const withUndated = cellsFor([undated, ...dated]);
+
+		expect(withUndated.map((c) => c.color)).toEqual(withoutUndated.map((c) => c.color));
+
+		const { blocks } = buildTreemap([undated, ...dated], {
+			w: 400,
+			h: 400,
+			weigh: 'records',
+			hueOf
+		});
+		const undatedCell = blocks.find((b) => b.nsid === 'a.b.undated').cells[0];
+		expect(undatedCell.undated).toBe(true);
+		expect(undatedCell.ts).toBeNull();
+		// off the recency ramp: not derived from (newest - ts) / span
+		expect(undatedCell.color).toBe('hsl(180 12% 50%)');
+	});
 });

@@ -119,13 +119,27 @@ export function buildTreemap(records, { w, h, weigh, hueOf }) {
 		if (!byCol.has(r.col)) byCol.set(r.col, []);
 		byCol.get(r.col).push(r);
 	}
-	for (const a of byCol.values()) a.sort((p, q) => p.ts - q.ts);
+	for (const a of byCol.values()) a.sort((p, q) => (p.ts ?? Infinity) - (q.ts ?? Infinity));
 
 	const leaves = [];
 	layoutNode(nsidTree(weights), 0, 0, w, h, leaves);
 
-	const newest = records.length ? records[records.length - 1].ts : Date.now();
-	const span = Math.max(newest - (records.length ? records[0].ts : newest), 1);
+	// Derive the recency window from records that actually carry a timestamp.
+	// Array position is not a proxy for "newest"/"oldest" -- undated records
+	// (no decodable TID, no createdAt) can sort anywhere -- so scan explicitly
+	// rather than reading the sorted array's ends.
+	let newest = -Infinity;
+	let oldest = Infinity;
+	for (const r of records) {
+		if (r.ts == null) continue;
+		if (r.ts > newest) newest = r.ts;
+		if (r.ts < oldest) oldest = r.ts;
+	}
+	if (newest === -Infinity) {
+		newest = Date.now();
+		oldest = newest;
+	}
+	const span = Math.max(newest - oldest, 1);
 
 	const blocks = [];
 	let cells = 0;
@@ -160,17 +174,27 @@ export function buildTreemap(records, { w, h, weigh, hueOf }) {
 
 		if (n && cw >= 2.5 && ch >= 2.5) {
 			recs.forEach((r, i) => {
-				const age = (newest - r.ts) / span;
+				// A record with no decodable timestamp has no recency to encode --
+				// giving it a computed age would draw a number the repo never
+				// supplied. Use one fixed neutral tone off the recency ramp instead,
+				// and flag it so the UI can say "undated" rather than implying it is
+				// very old or very new.
+				const undated = r.ts == null;
+				const age = undated ? null : (newest - r.ts) / span;
+				const color = undated
+					? `hsl(${hue} 12% 50%)`
+					: `hsl(${hue} ${(20 + 70 * (1 - age)).toFixed(0)}% ${(44 + 18 * age).toFixed(0)}%)`;
 				block.cells.push({
 					x: (i % cols) * cw,
 					y: Math.floor(i / cols) * ch,
 					w: Math.max(1, cw - 1),
 					h: Math.max(1, ch - 1),
-					color: `hsl(${hue} ${(20 + 70 * (1 - age)).toFixed(0)}% ${(44 + 18 * age).toFixed(0)}%)`,
+					color,
 					col: r.col,
 					rkey: r.rkey,
 					ts: r.ts,
 					bytes: r.bytes,
+					undated,
 					err: r.errs ? (r.errNames || []).join(', ') : ''
 				});
 				cells++;

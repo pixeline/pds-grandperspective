@@ -105,6 +105,9 @@ export async function parseRepoCar(bytes, opts = {}) {
 		onRecord?.(out, records.length);
 	}
 
-	records.sort((a, b) => (a.ts ?? 0) - (b.ts ?? 0));
+	// An undated record (no decodable TID, no createdAt) is not known to be the
+	// oldest thing in the repo -- sort it last, which claims nothing about its
+	// position beyond "not placed among the dated ones".
+	records.sort((a, b) => (a.ts ?? Infinity) - (b.ts ?? Infinity));
 	return { did: repo.did, rev: repo.commit.rev, records, collections: [...collections].sort() };
 }
