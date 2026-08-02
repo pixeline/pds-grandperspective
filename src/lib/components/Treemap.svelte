@@ -15,27 +15,103 @@
 	let canvas = $state(null);
 	let w = $state(900);
 	let h = $state(600);
-	let dpr = $state(1);
+	let focusedIndex = $state(-1);
 
-	// never lay out into a collapsed container: everything would silently
-	// collapse into "too small to resolve" and read as if that were the truth
+	// lay out at the container's real size. A floor here would compute the
+	// layout for a larger space than is actually drawn, silently clipping most
+	// of the repo out of view with nothing telling the viewer it exists — the
+	// exact dishonesty this project exists to avoid. A small container
+	// genuinely resolves fewer cells, and buildTreemap already says so
+	// honestly via `aggregated`; only guard the true zero/negative case.
 	const map = $derived(
-		buildTreemap(records, { w: Math.max(w, 700), h: Math.max(h, 460), weigh, hueOf })
+		buildTreemap(records, { w: Math.max(w, 1), h: Math.max(h, 1), weigh, hueOf })
 	);
-	const index = $derived(buildIndex(map.blocks, Math.max(w, 700), Math.max(h, 460)));
+	const index = $derived(buildIndex(map.blocks, Math.max(w, 1), Math.max(h, 1)));
 	const totalBytes = $derived(records.reduce((s, r) => s + (r.bytes || 0), 0));
+
+	// flat, layout-ordered list of everything drawable: one entry per real
+	// cell, or one per aggregate block. This is the keyboard's world — arrow
+	// keys walk this array, and its rects double as the focus outline's
+	// coordinates, so keyboard focus always lines up with what's drawn.
+	const flatCells = $derived(buildFlatCells(map));
+	const safeFocusedIndex = $derived(
+		focusedIndex >= 0 && focusedIndex < flatCells.length ? focusedIndex : -1
+	);
+	const announce = $derived.by(() => {
+		if (safeFocusedIndex < 0) return '';
+		const hit = flatCells[safeFocusedIndex].hit;
+		const col = hit.col ?? hit.nsid;
+		if (hit.aggregate) {
+			return `${col}, ${fmtNum(hit.records)} records, ${fmtBytes(hit.bytes)}, too small to resolve individually`;
+		}
+		return `${col} ${hit.rkey}, ${fmtBytes(hit.bytes || 0)}`;
+	});
+
+	function buildFlatCells(m) {
+		const out = [];
+		for (const b of m.blocks) {
+			if (b.aggregate || !b.cells.length) {
+				// same guard as draw(): an empty collection has neither cells nor
+				// a colour, so it is not a real drawable thing to focus
+				if (!b.color) continue;
+				out.push({
+					x: b.x,
+					y: b.y,
+					w: b.w,
+					h: b.h,
+					cols: 1,
+					hit: {
+						nsid: b.nsid,
+						col: b.nsid,
+						rkey: b.rkey ?? null,
+						records: b.records,
+						bytes: b.bytes,
+						aggregate: true
+					}
+				});
+				continue;
+			}
+			// recover the block's own column count from its pitch, so Up/Down
+			// can step by a row within this block
+			const cols = b.pitchW > 0 ? Math.max(1, Math.round(b.w / b.pitchW)) : 1;
+			for (const c of b.cells) {
+				out.push({
+					x: b.x + c.x,
+					y: b.y + c.y,
+					w: c.w,
+					h: c.h,
+					cols,
+					hit: {
+						nsid: b.nsid,
+						col: c.col,
+						rkey: c.rkey,
+						ts: c.ts,
+						bytes: c.bytes,
+						err: c.err,
+						aggregate: false
+					}
+				});
+			}
+		}
+		return out;
+	}
 
 	$effect(() => {
 		if (!canvas) return;
-		dpr = window.devicePixelRatio || 1;
-		draw(canvas, map, w, h, dpr);
+		// devicePixelRatio never changes mid-session in any way this app
+		// reacts to; making it reactive state read and written in this same
+		// effect only makes the effect its own dependency, forcing a second
+		// redraw on mount on every HiDPI display once the real ratio replaces
+		// the initial guess of 1
+		const ratio = window.devicePixelRatio || 1;
+		draw(canvas, map, w, h, ratio, flatCells, safeFocusedIndex);
 	});
 
 	/**
 	 * Batch by fill colour: setting fillStyle per record would be ~200k state
 	 * changes on a large repo, where grouping makes it a few thousand.
 	 */
-	function draw(cv, m, cw, ch, ratio) {
+	function draw(cv, m, cw, ch, ratio, cells, focusIdx) {
 		cv.width = Math.round(cw * ratio);
 		cv.height = Math.round(ch * ratio);
 		cv.style.width = `${cw}px`;
@@ -80,26 +156,83 @@
 			ctx.fillStyle = '#161a18';
 			ctx.fillText(b.label, b.x + 3, b.y + 2);
 		}
+
+		// keyboard focus outline, drawn last so it always shows on top
+		if (focusIdx >= 0 && cells[focusIdx]) {
+			const f = cells[focusIdx];
+			const ink = getComputedStyle(cv).getPropertyValue('--ink').trim() || '#161a18';
+			ctx.strokeStyle = ink;
+			ctx.lineWidth = 1;
+			ctx.strokeRect(f.x + 0.5, f.y + 0.5, Math.max(0, f.w - 1), Math.max(0, f.h - 1));
+		}
 	}
 
 	function at(ev) {
 		const r = canvas.getBoundingClientRect();
 		return hitTest(index, ev.clientX - r.left, ev.clientY - r.top);
 	}
+
+	function onfocus() {
+		if (safeFocusedIndex < 0 && flatCells.length) focusedIndex = 0;
+	}
+
+	function onkeydown(ev) {
+		const n = flatCells.length;
+		if (!n) return;
+		const i = safeFocusedIndex;
+		const cols = i >= 0 ? flatCells[i].cols : 1;
+		let next = i;
+
+		switch (ev.key) {
+			case 'ArrowRight':
+				next = Math.min(n - 1, (i < 0 ? -1 : i) + 1);
+				break;
+			case 'ArrowLeft':
+				next = Math.max(0, (i < 0 ? 1 : i) - 1);
+				break;
+			case 'ArrowDown':
+				next = Math.min(n - 1, (i < 0 ? -cols : i) + cols);
+				break;
+			case 'ArrowUp':
+				next = Math.max(0, (i < 0 ? cols : i) - cols);
+				break;
+			case 'Home':
+				next = 0;
+				break;
+			case 'End':
+				next = n - 1;
+				break;
+			case 'Enter':
+			case ' ':
+				if (i >= 0) onopen?.(flatCells[i].hit);
+				ev.preventDefault();
+				return;
+			default:
+				return;
+		}
+
+		ev.preventDefault();
+		focusedIndex = next;
+		onhover?.(flatCells[next]?.hit ?? null);
+	}
 </script>
 
 <div class="map" bind:clientWidth={w} bind:clientHeight={h}>
 	<canvas
 		bind:this={canvas}
+		tabindex="0"
 		onmousemove={(e) => onhover?.(at(e))}
 		onmouseleave={() => onhover?.(null)}
 		onclick={(e) => {
 			const hit = at(e);
 			if (hit) onopen?.(hit);
 		}}
-		aria-label="Treemap of repository contents. {fmtNum(records.length)} records."
-		role="img"
+		onfocus={onfocus}
+		onkeydown={onkeydown}
+		aria-label="Treemap of repository contents. {fmtNum(records.length)} records. Arrow keys move between cells, Enter opens the focused one."
 	></canvas>
+
+	<div class="sr-only" aria-live="polite">{announce}</div>
 
 	<div class="info">
 		{map.leaves} collections · {fmtNum(records.length)} records · {fmtBytes(totalBytes)}
@@ -122,6 +255,17 @@
 	canvas {
 		display: block;
 		cursor: pointer;
+	}
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
 	}
 	.info {
 		position: absolute;
