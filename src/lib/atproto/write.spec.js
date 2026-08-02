@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { validateEdit, putRecord, deleteRecord } from './write.js';
+import { validateEdit, putRecord, deleteRecord, guardedWrite } from './write.js';
 
 describe('validateEdit', () => {
 	const original = { $type: 'app.bsky.feed.post', text: 'hello' };
@@ -105,6 +105,79 @@ describe('deleteRecord', () => {
 			collection: 'a.b.c',
 			rkey: 'k1'
 		});
+	});
+});
+
+describe('guardedWrite', () => {
+	// This is the concurrency guard RecordModal.svelte relies on: a record's
+	// own `busy` display flag can legitimately be reset by switching away
+	// from it and back (see RecordModal's identity effect), so something
+	// keyed to the record itself, independent of what is on screen, has to
+	// be the thing that actually stops a second write from starting.
+	it('refuses a second write for the same key while the first is in flight, but lets a different key through', async () => {
+		vi.useFakeTimers();
+		try {
+			/** @type {Set<string>} */
+			const inFlight = new Set();
+			// A connection that never gets a response -- stands in for the
+			// first write still being in flight when the second is attempted.
+			const session = fakeSession(() => new Promise(() => {}));
+
+			// Start a write for key A. Deliberately not awaited: it is never
+			// going to resolve in this test, and only its synchronous side
+			// effect (reaching fetchHandler, occupying the key) matters here.
+			guardedWrite(inFlight, 'colA/rkeyA', () =>
+				putRecord(session, { did: 'd', col: 'colA', rkey: 'rkeyA', value: {} })
+			);
+			expect(session.calls.length).toBe(1);
+			expect(inFlight.has('colA/rkeyA')).toBe(true);
+
+			// A second write for the SAME key must be refused before it ever
+			// reaches fetchHandler, and must say why.
+			const second = await guardedWrite(inFlight, 'colA/rkeyA', () =>
+				putRecord(session, { did: 'd', col: 'colA', rkey: 'rkeyA', value: {} })
+			);
+			expect(second.ok).toBe(false);
+			expect(second).toMatchObject({ reason: expect.stringMatching(/already in progress/i) });
+			// still just the one call from the first write -- the refused
+			// second call never touched the network
+			expect(session.calls.length).toBe(1);
+
+			// A write for a DIFFERENT key must go through undisturbed: the
+			// guard is keyed to the record, not a global lock.
+			guardedWrite(inFlight, 'colB/rkeyB', () =>
+				putRecord(session, { did: 'd', col: 'colB', rkey: 'rkeyB', value: {} })
+			);
+			expect(session.calls.length).toBe(2);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
+	it('clears the key once the write settles, so a later write for the same key is allowed', async () => {
+		const inFlight = new Set();
+		const session = fakeSession();
+
+		const outcome = await guardedWrite(inFlight, 'col/rkey', () =>
+			putRecord(session, { did: 'd', col: 'col', rkey: 'rkey', value: {} })
+		);
+
+		expect(outcome.ok).toBe(true);
+		expect(inFlight.has('col/rkey')).toBe(false);
+		expect(session.calls.length).toBe(1);
+	});
+
+	it('clears the key on failure too, not just on success', async () => {
+		const inFlight = new Set();
+		const session = fakeSession(async () => new Response('boom', { status: 500 }));
+
+		await expect(
+			guardedWrite(inFlight, 'col/rkey', () =>
+				putRecord(session, { did: 'd', col: 'col', rkey: 'rkey', value: {} })
+			)
+		).rejects.toThrow();
+
+		expect(inFlight.has('col/rkey')).toBe(false);
 	});
 });
 

@@ -1,7 +1,14 @@
 <script>
-	import { validateEdit, putRecord, deleteRecord } from '$lib/atproto/write.js';
+	import {
+		validateEdit,
+		putRecord,
+		deleteRecord,
+		guardedWrite,
+		ALREADY_IN_FLIGHT_REASON
+	} from '$lib/atproto/write.js';
 	import { fmtBytes, fmtDate } from '$lib/repo/format.js';
 	import { tidToMs } from '$lib/atproto/tid.js';
+	import { SvelteSet } from 'svelte/reactivity';
 
 	let {
 		record = null,
@@ -62,6 +69,33 @@
 		busy = false;
 	});
 
+	// `busy` is a *display* flag -- is the record currently on screen
+	// mid-write -- and resetting it on identity change is correct for that
+	// job alone. It used to incidentally be the only thing stopping a
+	// second concurrent write on the same record, but that is concurrency
+	// control, a different job, keyed to the record rather than to what
+	// happens to be on screen: switch from A to B and back to A while A's
+	// delete is still in flight, and the identity effect above resets
+	// `busy` to `false` twice for a request that never stopped running --
+	// nothing about display state can tell you a request is still out
+	// there. `inFlight` (paired with `guardedWrite` from write.js, which is
+	// the actual concurrency guard, independently tested there) tracks that
+	// instead, by key, and is never touched by the identity effect.
+	// `SvelteSet` (not a plain `Set`) so the `writeInFlight` derived below
+	// can react to `.add`/`.delete` -- a plain `Set` mutated in place would
+	// not notify Svelte's reactivity and the Edit/Delete buttons below would
+	// not visibly disable.
+	const inFlight = new SvelteSet();
+
+	// Whether the record currently on screen has a write outstanding
+	// somewhere, even if `busy` (this component's own recollection of that)
+	// has since been reset by a trip to another record and back. Cheap to
+	// derive because `inFlight` is already reactive; used only to disable
+	// Edit/Delete and explain why, not to gate save()/remove() themselves --
+	// the guard inside those functions is the actual concurrency control and
+	// does not depend on this derived being up to date.
+	const writeInFlight = $derived(record ? inFlight.has(keyOf(record)) : false);
+
 	const writable = $derived(isOwnRepo && canWrite && !!agent && !record?.aggregate);
 
 	const tidTime = $derived(record?.rkey ? tidToMs(record.rkey) : null);
@@ -98,15 +132,29 @@
 		// while the request is in flight (the parent can select a different
 		// cell), so every reference below must use this local, not the prop.
 		const target = record;
+		const key = keyOf(target);
 		const check = validateEdit(target.value, text);
 		if (!check.ok) {
 			problem = check.reason;
 			return;
 		}
-		busy = true;
-		problem = null;
 		try {
-			await putRecord(agent, { did, col: target.col, rkey: target.rkey, value: check.value });
+			// guardedWrite is the actual concurrency control (independently
+			// tested in write.spec.js): `busy`/`problem` only get set inside
+			// the callback below, which it only invokes if `key` doesn't
+			// already have a write running -- a trip to another record and
+			// back can reset the *display* flag `busy` (see the identity
+			// effect above) while this exact write is still outstanding, so
+			// `busy` alone cannot be trusted to say so.
+			const outcome = await guardedWrite(inFlight, key, async () => {
+				busy = true;
+				problem = null;
+				await putRecord(agent, { did, col: target.col, rkey: target.rkey, value: check.value });
+			});
+			if (!outcome.ok) {
+				if (keyOf(target) === keyOf(record)) problem = outcome.reason;
+				return;
+			}
 			onchanged?.({ action: 'updated', record: target, value: check.value });
 			// The write is pinned to `target`, but busy/editing are still
 			// shared display state. Only touch them if the modal is still
@@ -131,10 +179,17 @@
 		// awaiting, so a mid-flight selection change can't misattribute the
 		// result to whatever happens to be selected when the response lands.
 		const target = record;
-		busy = true;
-		problem = null;
+		const key = keyOf(target);
 		try {
-			await deleteRecord(agent, { did, col: target.col, rkey: target.rkey });
+			const outcome = await guardedWrite(inFlight, key, async () => {
+				busy = true;
+				problem = null;
+				await deleteRecord(agent, { did, col: target.col, rkey: target.rkey });
+			});
+			if (!outcome.ok) {
+				if (keyOf(target) === keyOf(record)) problem = outcome.reason;
+				return;
+			}
 			onchanged?.({ action: 'deleted', record: target });
 			// Only close (and only clear busy) if the modal is still showing
 			// the record that was just deleted. If the parent moved on to a
@@ -230,8 +285,13 @@
 					</button>
 					<button class="ghost" onclick={() => (confirming = false)} disabled={busy}>Keep</button>
 				{:else}
-					<button onclick={startEdit}>Edit</button>
-					<button class="ghost" onclick={() => (confirming = true)}>Delete</button>
+					<button onclick={startEdit} disabled={writeInFlight}>Edit</button>
+					<button class="ghost" onclick={() => (confirming = true)} disabled={writeInFlight}>
+						Delete
+					</button>
+					{#if writeInFlight}
+						<span class="ro">{ALREADY_IN_FLIGHT_REASON}</span>
+					{/if}
 				{/if}
 			{:else if readOnlyReason}
 				<span class="ro">{readOnlyReason}</span>

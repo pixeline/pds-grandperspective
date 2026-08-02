@@ -146,3 +146,38 @@ export async function deleteRecord(session, { did, col, rkey }) {
 		rkey
 	});
 }
+
+/** The refusal reason `guardedWrite` returns for a key already in flight. */
+export const ALREADY_IN_FLIGHT_REASON = 'A write for this record is already in progress.';
+
+/**
+ * Refuse to start a second write for a key that already has one running,
+ * rather than letting two writes race against the same record with
+ * whichever happens to resolve last silently winning.
+ *
+ * A display flag like a UI's own "busy" state is the wrong place to guard
+ * this: it can legitimately be reset by something that has nothing to do
+ * with whether a request is still in flight (e.g. the UI moving on to show
+ * a different record and back). Concurrency control has to be keyed to the
+ * record, tracked independently of whatever is currently on screen, and
+ * this is deliberately a plain combinator with no state of its own --
+ * `inFlight` is owned and reset by the caller (nothing here ever clears it
+ * except the `finally` below, on the write it itself started).
+ *
+ * @param {Set<string|null>} inFlight
+ * @param {string|null} key
+ * @param {() => Promise<any>} run
+ * @returns {Promise<{ok: true} | {ok: false, reason: string}>}
+ */
+export async function guardedWrite(inFlight, key, run) {
+	if (inFlight.has(key)) {
+		return { ok: false, reason: ALREADY_IN_FLIGHT_REASON };
+	}
+	inFlight.add(key);
+	try {
+		await run();
+		return { ok: true };
+	} finally {
+		inFlight.delete(key);
+	}
+}
