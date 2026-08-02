@@ -3062,6 +3062,26 @@ EOF
 - Consumes: `validateEdit`, `putRecord`, `deleteRecord` from `write.js`; `fmtBytes`, `fmtDate` from `format.js`
 - Produces: props `{record, did, agent, canWrite, isOwnRepo, onclose, onchanged}`. `onchanged({action, record})` fires with `action` of `'updated' | 'deleted'` so the caller can patch local state.
 
+> **The hazard in this component is state that outlives the record it describes.** The modal
+> is mounted once and re-pointed at different records rather than remounted, so anything
+> meaning "the current record" — `confirming`, `editing`, `text`, `problem` — must be keyed
+> to the record's identity (`col` + `rkey`) and reset when that changes, including to and
+> from `null`. Resetting inside `onclose` is **not** sufficient: there are three close paths
+> plus a bare prop change that bypasses all of them. Without this, pressing Delete on one
+> record and then selecting another leaves the footer showing "Confirm delete" — and one
+> click destroys a record the user never confirmed. The stale-edit twin of this overwrites
+> one record's body onto another's key, and `validateEdit`'s `$type` guard does not catch it
+> when both records share a collection.
+>
+> Anything surviving an `await` needs the same pinning: capture the target record before the
+> write, use it for the write parameters *and* the `onchanged` payload, and confirm it is
+> still the displayed record before touching `busy`, `editing` or `problem` afterwards.
+> Otherwise one record's outcome is reported onto another.
+>
+> Close paths are gated on `!busy` so a write cannot be abandoned mid-flight — which makes a
+> bounded write mandatory. `procedure()` in `write.js` carries a timeout; without it a hung
+> request would leave the modal permanently unclosable.
+
 - [ ] **Step 1: Create the component**
 
 Create `src/lib/components/RecordModal.svelte`:
@@ -4055,6 +4075,11 @@ Replace `src/routes/+page.svelte` entirely:
 				onhover={(h) => (hover = h)}
 				onopen={(h) => (selected = h)}
 			/>
+			<!-- Note: RecordModal resets its own per-record state when `selected`
+			     changes, and refuses to apply a completed write's outcome to a
+			     record it is no longer showing. Do not rely on the parent to
+			     serialise that; the modal owns it. -->
+			
 			<Tip info={hover} hueOf={hues.hueOf} />
 		{/if}
 
