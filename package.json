@@ -27,6 +27,7 @@
 	},
 	"dependencies": {
 		"@atproto/oauth-client-browser": "^0.5.1",
-		"@atproto/repo": "^0.10.7"
+		"@atproto/repo": "^0.10.7",
+		"buffer": "^6.0.3"
 	}
 }

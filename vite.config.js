@@ -1,16 +1,47 @@
+import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 import adapter from '@sveltejs/adapter-static';
 import { sveltekit } from '@sveltejs/kit/vite';
 
 export default defineConfig({
-	// @atproto/repo pulls in a server-oriented logger (pino) that reads
-	// process.env.* at module-eval time with no browser guard. This app never
-	// runs on a server (constraint 2: all reading is client-side), so there is
-	// no real process.env to read -- replace it with an empty object so those
-	// reads resolve to undefined instead of throwing "process is not defined"
-	// the instant the page imports readRepo.
+	resolve: {
+		alias: {
+			// @atproto/repo's CAR reader imports setImmediate from
+			// node:timers/promises to yield to the event loop every 25 blocks.
+			// Vite externalizes node: specifiers to an empty stub for the
+			// browser, so the named export is undefined and calling it throws --
+			// which read.js's catch silently turns into a fall back to
+			// listAllRecords, losing the CAR's exact byte sizes. Aliasing the
+			// exact specifier to a browser-safe shim (src/lib/atproto/timers-
+			// shim.js) resolves it there instead of to the stub.
+			'node:timers/promises': fileURLToPath(
+				new URL('./src/lib/atproto/timers-shim.js', import.meta.url)
+			)
+		}
+	},
+	// @atproto/repo pulls in @atproto/common's logger (pino), which reads four
+	// specific env vars at module-eval time with no browser guard: LOG_ENABLED,
+	// LOG_DESTINATION, LOG_LEVEL, LOG_SYSTEMS (node_modules/@atproto/common/dist/
+	// logger.js). This app never runs on a server (constraint 2: all reading is
+	// client-side), so there is no real process.env to read for these -- define
+	// exactly these four literal accesses rather than blanket-defining
+	// `process.env`, so any *other* process.env read anywhere in the dependency
+	// tree still throws instead of silently going undefined (constraint 3:
+	// fail loudly, don't paper over).
+	//
+	// @atproto/common also exports envInt/envStr/envBool/envList (dist/env.js),
+	// which read process.env[name] dynamically -- a narrow define can't cover a
+	// runtime variable key. Confirmed by grepping the actual Vite-optimized
+	// dependency bundle (node_modules/.vite/deps/@atproto_repo.js) that these
+	// four functions are never called anywhere in the reachable code: only
+	// logger.js's four literal reads appear there. If a future @atproto/*
+	// upgrade starts calling them, this narrow define will stop working and the
+	// failure will be loud (a real ReferenceError), which is the point.
 	define: {
-		'process.env': {}
+		'process.env.LOG_ENABLED': 'undefined',
+		'process.env.LOG_DESTINATION': 'undefined',
+		'process.env.LOG_LEVEL': 'undefined',
+		'process.env.LOG_SYSTEMS': 'undefined'
 	},
 	plugins: [
 		sveltekit({

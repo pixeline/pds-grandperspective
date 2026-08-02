@@ -1,3 +1,7 @@
+// Import order is source order: this must run before @atproto/repo is
+// evaluated so the global it needs already exists, not merely before we call
+// into it.
+import './buffer-shim.js';
 import { readCarWithRoot, MemoryBlockstore, Repo } from '@atproto/repo';
 import { recordTime } from './tid.js';
 import { audit } from './audit.js';

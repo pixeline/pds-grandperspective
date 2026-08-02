@@ -146,18 +146,23 @@
 
 	function onchanged({ action, record, value }) {
 		if (!data) return;
+		let records = data.records;
 		if (action === 'deleted') {
-			data = { ...data, records: data.records.filter((r) => r.rkey !== record.rkey || r.col !== record.col) };
+			records = records.filter((r) => r.rkey !== record.rkey || r.col !== record.col);
 		} else if (action === 'updated') {
-			data = {
-				...data,
-				records: data.records.map((r) =>
-					r.rkey === record.rkey && r.col === record.col
-						? { ...r, value, bytes: JSON.stringify(value).length, exact: false }
-						: r
-				)
-			};
+			records = records.map((r) =>
+				r.rkey === record.rkey && r.col === record.col
+					? { ...r, value, bytes: JSON.stringify(value).length, exact: false }
+					: r
+			);
 		}
+		// data.exact is the aggregate "measured (CAR) / estimated" label the Rail
+		// shows; each record already carries its own exact flag (true from the
+		// CAR, false from listRecords or a local edit -- see list.js and above).
+		// Recompute it from the records rather than leaving it pinned to
+		// whatever the initial read was, or an edit after a fully-measured CAR
+		// read would still claim everything is measured.
+		data = { ...data, records, exact: records.every((r) => r.exact !== false) };
 		hues = collectionHues(data.records);
 	}
 
