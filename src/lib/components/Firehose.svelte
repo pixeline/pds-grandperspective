@@ -23,7 +23,11 @@
 		}[phase] ?? phase
 	);
 
-	const hhmmss = (ts) => new Date(ts).toISOString().slice(11, 19);
+	// An undated record (no decodable TID, no createdAt) has no real time to
+	// show -- `new Date(null)` silently renders 1970-01-01 as "00:00:00",
+	// the exact fake-timestamp pattern the `ts: null` decision elsewhere in
+	// this branch exists to eliminate. Say so honestly instead of inventing one.
+	const hhmmss = (ts) => (ts == null ? '—' : new Date(ts).toISOString().slice(11, 19));
 </script>
 
 <div class="fh">
