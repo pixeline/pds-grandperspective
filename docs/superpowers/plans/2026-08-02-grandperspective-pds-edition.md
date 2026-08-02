@@ -1156,8 +1156,11 @@ export async function listAllRecords(pds, did, opts = {}) {
 
 			for (const r of j.records || []) {
 				const rkey = String(r.uri).split('/').pop();
+				// keep records whose time cannot be decoded -- they still occupy
+				// bytes, and on a real repo they are ~25 singleton `self`-keyed
+				// config records spread one per collection. Dropping them would
+				// erase those collections from a map that measures disk usage.
 				const { ts, tid } = recordTime(rkey, r.value, now);
-				if (ts == null) continue;
 				const errNames = audit(col, rkey, r.value, tid, now);
 				records.push({
 					col,
@@ -1177,7 +1180,9 @@ export async function listAllRecords(pds, did, opts = {}) {
 		}
 	}
 
-	records.sort((a, b) => a.ts - b.ts);
+	// undated records sort last. `a.ts - b.ts` would coerce null to 0 and claim
+	// they are the oldest things in the repo, which is a fact we do not have.
+	records.sort((a, b) => (a.ts ?? Infinity) - (b.ts ?? Infinity));
 	return { records, collections };
 }
 ```
@@ -1633,6 +1638,34 @@ describe('applyFilters', () => {
 		const out = applyFilters([{ col: 'a.b.c', rkey: 'x', ts: 0, bytes: 1 }], { ...none, query: 'zzz' });
 		expect(out.matched).toBe(0);
 	});
+
+	// ~25 records in a real repo have no decodable TID and no createdAt --
+	// singleton `self`-keyed config records, one per collection. They must not
+	// coerce through null == 0 into "the dawn of time".
+	describe('records with no timestamp', () => {
+		const undated = [
+			...RECORDS,
+			{ col: 'blue.linkat.board', rkey: 'self', ts: null, bytes: 50, value: { cards: [] } }
+		];
+
+		it('keeps an undated record when no timeframe is set', () => {
+			const out = applyFilters(undated, none);
+			expect(out.matched).toBe(5);
+			expect(out.bytes).toBe(150);
+		});
+
+		it('excludes an undated record whenever any bound is set', () => {
+			// unknown time cannot be shown to fall inside a requested range, in
+			// either direction -- so both bounds must exclude it, and the `to`-only
+			// case is the one a null-coercing comparison gets wrong
+			expect(applyFilters(undated, { ...none, from: T('2020-01-01') }).matched).toBe(4);
+			expect(applyFilters(undated, { ...none, to: T('2030-01-01') }).matched).toBe(4);
+		});
+
+		it('still searches an undated record by content', () => {
+			expect(applyFilters(undated, { ...none, query: 'linkat' }).matched).toBe(1);
+		});
+	});
 });
 ```
 
@@ -1684,6 +1717,13 @@ export function applyFilters(records, f) {
 		totalBytes += r.bytes || 0;
 
 		if (byCol && ![...collections].some((sel) => underNamespace(r.col, sel))) continue;
+
+		// An undated record -- no decodable TID, no createdAt -- cannot be shown
+		// to fall inside a requested range, so any bound excludes it. Testing
+		// `r.ts` directly would coerce null to 0: `null < from` is true (excluded)
+		// but `null > to` is false (INCLUDED), so a to-only filter would silently
+		// keep records it cannot place.
+		if ((from != null || to != null) && r.ts == null) continue;
 		if (from != null && r.ts < from) continue;
 		if (to != null && r.ts > to) continue;
 
@@ -3513,6 +3553,9 @@ Replace `src/lib/components/Rail.svelte` entirely:
 						<tr><td class="k">revision</td><td class="v">{stats.rev}</td></tr>
 					{/if}
 					<tr><td class="k">first record</td><td class="v">{stats.first}</td></tr>
+					{#if stats.undated}
+						<tr><td class="k">undated</td><td class="v">{stats.undated}</td></tr>
+					{/if}
 					<tr>
 						<td class="k">invalid</td>
 						<td class="v">{stats.invalid} ({stats.invalidPct}%)</td>
@@ -3834,9 +3877,16 @@ Replace `src/routes/+page.svelte` entirely:
 			invalidPct: data.records.length
 				? ((invalid / data.records.length) * 100).toFixed(2)
 				: '0.00',
-			first: data.records.length
-				? new Date(data.records[0].ts).toISOString().slice(0, 10)
-				: '—'
+			// undated records sort last, but do not depend on position: scan for
+			// the earliest record that actually has a timestamp
+			first: (() => {
+				let earliest = null;
+				for (const r of data.records) {
+					if (r.ts != null && (earliest == null || r.ts < earliest)) earliest = r.ts;
+				}
+				return earliest == null ? '—' : new Date(earliest).toISOString().slice(0, 10);
+			})(),
+			undated: data.records.reduce((s, r) => s + (r.ts == null ? 1 : 0), 0)
 		};
 	});
 
