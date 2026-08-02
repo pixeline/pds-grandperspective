@@ -1,57 +1,29 @@
-# Stills & Frames
+# GrandPerspective — PDS edition
 
-A parametric data-portrait generator for the AT Protocol. Point it at any handle and it
-reads the whole repo — every collection, including lexicons it has never seen — then draws
-what it found.
+See where an atproto repo's bytes actually go, then act on what you find.
 
-Nothing is decorative. Every mark traces to a number in the repo, and the torn blocks are
-records that genuinely fail validation.
+Enter any handle or DID and the tool reads that repo in full, straight from its
+PDS in your browser, and draws it as a treemap: one cell per record, area
+proportional to the bytes it actually occupies. Sign in with your own atproto
+account and you can edit or delete your own records.
 
-## Two viewers over one read
+Everything runs client-side. There is no server, no proxy, and no credential
+ever leaves your browser — public repo reads need no authentication at all, and
+writes use atproto OAuth.
 
-**Stills & Frames** — the repo as time. Sessions of activity become plates in a stack:
-depth is silence, twist is cadence, colour is lexicon. Head-on the stack collapses into a
-square, and that square is the avatar. Turn it and the square turns out to have been a
-sequence. Fly through it.
+## Development
 
-**GrandPerspective** — the repo as space. One cell per record, nested by lexicon and
-**sized by stored bytes**, so a handful of long documents outweighs hundreds of tiny
-stubs. This is the disk-usage reading of the same data.
+    npm install
+    npm run dev      # binds 127.0.0.1 — required for the OAuth loopback client
+    npm test
+    npm run build
 
-Both are hoverable and clickable: every mark opens that exact record on
-[pdsls.dev](https://pdsls.dev).
+## Credits
 
-## Run it
+Made by [@pixeline.be](https://bsky.app/profile/pixeline.be).
 
-```bash
-npm install
-npm run dev
-```
-
-Type a handle, pick a viewer. Drag to orbit, scroll to fly through time, shift+scroll to
-zoom, W/S/A/D to steer.
-
-```bash
-npm test     # unit tests over the pure core
-npm run build  # static output in build/, relative paths
-```
-
-Reads are public and unauthenticated, so no credentials and no server are involved — all
-of it happens in the browser. A self-hosted PDS must send `Access-Control-Allow-Origin` on
-`/xrpc/` for that to work.
-
-Every portrait is a URL. The handle, viewer and full parameter set round-trip through the
-hash, so `#v=map&h=pixeline.be&twist=24` is reproducible and shareable.
-
-## Where things are
-
-- `src/lib/atproto/` — identity, fair paginated reading, TID decoding, the error taxonomy
-- `src/lib/portrait/` — sessions, layout, treemap, parameters. Pure functions, no DOM
-- `src/lib/components/` — the viewers and the instrument panel
-- `prototype/` — the original single-file prototype, kept for reference only
-- `docs/brief.md` — what this is for and where the visual language comes from
-- `docs/mapping.md` — every visual property and its data source
-- `CLAUDE.md` — constraints, architecture, and what to do next
-
-The mapping emits plain data — a plate is numbers plus a list of marks — and the components
-render it. That seam is what keeps the mapping testable.
+The treemap concept and the name come from
+[**GrandPerspective**](https://grandperspectiv.sourceforge.net/) by Erwin
+Bonsma — a disk usage visualiser for macOS, released under the GPL. This project
+is an independent work applying the same idea to atproto repositories. It is not
+a port of GrandPerspective and is not affiliated with it.

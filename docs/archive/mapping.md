@@ -1,3 +1,9 @@
+> **Archived.** This documents the retired *Stills & Frames* stack viewer, kept
+> because it records the reasoning behind the fair-reading and scoped-auditing
+> decisions that are still live. The code it describes is on the
+> `archive/stills-and-frames` branch. The current design is in
+> `docs/superpowers/specs/2026-08-02-grandperspective-pds-edition-design.md`.
+
 # The mapping
 
 Under constraint 6, every visual property has a named source. This is that list. If a
