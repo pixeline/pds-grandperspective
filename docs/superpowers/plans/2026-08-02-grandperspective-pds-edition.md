@@ -939,8 +939,11 @@ export async function parseRepoCar(bytes, opts = {}) {
 	const collections = new Set();
 
 	for await (const { collection, rkey, cid, record } of repo.walkRecords()) {
+		// Keep records whose time cannot be decoded. On the live test repo that
+		// is 25 records across 25 distinct collections, one each -- singleton
+		// `self`-keyed config records. They occupy bytes, and dropping them
+		// would erase those collections from a map that measures disk usage.
 		const { ts, tid } = recordTime(rkey, record, now);
-		if (ts == null) continue;
 		const errNames = audit(collection, rkey, record, tid, now);
 		const out = {
 			col: collection,
@@ -957,10 +960,22 @@ export async function parseRepoCar(bytes, opts = {}) {
 		onRecord?.(out, records.length);
 	}
 
-	records.sort((a, b) => a.ts - b.ts);
+	// Undated records sort LAST. `a.ts - b.ts` coerces null to 0 and would claim
+	// they are the oldest records in the repo, a fact nobody has. Nothing
+	// downstream may derive the repo's time span from array position -- see the
+	// note below.
+	records.sort((a, b) => (a.ts ?? Infinity) - (b.ts ?? Infinity));
 	return { did: repo.did, rev: repo.commit.rev, records, collections: [...collections].sort() };
 }
 ```
+
+**`treemap.js` must not read the time span off array ends.** It previously did
+(`records[0].ts`, `records[records.length - 1].ts`), which with a single undated
+record inflated the span roughly fifteen-fold and silently flattened the recency
+gradient across the entire map — no crash, no `NaN`, no failing test. Compute
+`newest`/`oldest` by scanning for records that actually carry a timestamp, and
+give undated cells one fixed colour off the recency ramp plus an `undated: true`
+flag. Never invent a fallback timestamp.
 
 - [ ] **Step 5: Run the test to verify it passes**
 
