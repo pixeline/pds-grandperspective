@@ -311,12 +311,39 @@ the user's PDS acting as an AppView proxy — a contract non-`bsky.social` deplo
 
 ## 4. Treemap and renderer
 
-### 4.1 Layout — unchanged
+### 4.1 Layout — NSID-nested squarify, applied twice: block, then cell
 
-`treemap.js` is kept as it is: NSID-nested squarified layout, one cell per record, sized by
-stored bytes or by record count, with blocks too small to resolve shown whole and labelled
-as aggregated rather than faked. Its input changes — it receives the filtered record set
-(§5) rather than all records — but the algorithm does not.
+`treemap.js` is NSID-nested squarified layout, with blocks too small to resolve shown
+whole and labelled as aggregated rather than faked. Its input changes with filtering —
+it receives the filtered record set (§5) rather than all records — but the nesting
+algorithm does not.
+
+**Cells within a block are squarified by the record's own weight, not laid on a uniform
+grid.** An earlier version of this layout got block-level proportion right — a
+collection's block area was exactly proportional to its stored bytes — but inside a
+block, cells sat on a uniform grid (`cols = round(sqrt(n·w/h))`, every cell the same
+size), so a record's own size was never consulted. A 100,000 B record and a 100 B
+record in the same collection drew identically: a byte ratio of 1000 against an area
+ratio of 1.000. That is the exact defect this tool exists to correct, one level down.
+
+The fix reuses the same `squarify` function blocks are laid out with, called again
+per block over that block's own records: weight is the record's `bytes` when
+`weigh === 'bytes'`, or 1 per record when `weigh === 'records'` — so the "sized by"
+toggle changes cell-level area, not only block-level area. Squarify's area-conservation
+property is exact regardless of row placement, so a record with 1000× the weight of
+another in the same block gets ~1000× the drawn (tile) area.
+
+**Aggregation is decided from the resulting rectangles, not a uniform-grid estimate.**
+A block still aggregates — shown whole, not faked as individual cells — when its
+records cannot resolve to a pixel each. The cheap uniform-grid estimate
+(`cw/ch >= 2.5`) is still used as an up-front filter, so a block with far too many
+records to ever resolve (e.g. `app.bsky.feed.like` at 174k records on pixeline.be)
+never pays for a squarify pass over its own records. But a block that passes that
+filter is squarified for real, and the minimum side of the resulting rectangles is
+what decides aggregation — a severely skewed byte distribution can leave one record's
+cell under the pixel floor even when the block-level average looked fine, and that
+still aggregates the whole block. On the reference repo only ~4,170 cells are ever
+laid out individually this way; the rest resolve to one of ~79 aggregated blocks.
 
 ### 4.2 Renderer — canvas 2D, replacing one `div` per record
 

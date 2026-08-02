@@ -153,6 +153,15 @@ export function buildTreemap(records, { w, h, weigh, hueOf }) {
 		const n = recs.length;
 		const hue = hueOf.get(nsid) ?? 0;
 
+		// Cheap pre-filter before spending a squarify pass on this block: the
+		// same "average cell area" estimate the uniform grid used to compute
+		// (cols/rows from n and the block's own w/h) still tells us, for
+		// free, whether this block is even in the running to resolve
+		// per-record. A giant collection (app.bsky.feed.like: 174k records on
+		// pixeline.be) fails this immediately and never touches squarify --
+		// which matters, because squarifying every record in a 174k-record
+		// block on every layout would not be "cheap in practice" the way
+		// aggregating it is.
 		const cols = Math.max(1, Math.round(Math.sqrt((n * L.w) / Math.max(L.h, 1))));
 		const rows = Math.max(1, Math.ceil(n / cols));
 		const cw = L.w / cols;
@@ -169,16 +178,35 @@ export function buildTreemap(records, { w, h, weigh, hueOf }) {
 			bytes: recs.reduce((s, r) => s + (r.bytes || 0), 0),
 			label: L.w > 54 && L.h > 15 ? `${nsid.split('.').slice(-2).join('.')} · ${n}` : null,
 			cells: [],
-			aggregate: false,
-			// the grid pitch cells are laid out on -- each cell draws inset from this
-			// (cw-1 x ch-1) for visual separation, but the pitch is the true tiling
-			// with no gap, and that is what hit testing needs
-			pitchW: cw,
-			pitchH: ch
+			aggregate: false
 		};
 
+		// Cell area must be proportional to what `weigh` says it should be --
+		// bytes, or equal record weight. Squarify (the same algorithm that
+		// lays out blocks by collection weight) does this at the record
+		// level too, rather than a uniform grid that gives every record in a
+		// block the same drawn area regardless of its own size.
+		let cellRects = null;
 		if (n && cw >= 2.5 && ch >= 2.5) {
-			recs.forEach((r, i) => {
+			const items = recs.map((r) => ({ n: weigh === 'bytes' ? r.bytes || 1 : 1, node: r }));
+			// squarify's aspect-ratio quality improves when rows are grown
+			// largest-first; Array#sort is stable, so equal-weight records
+			// (weigh === 'records') keep the chronological order byCol
+			// already sorted them into.
+			items.sort((a, b) => b.n - a.n);
+			const rects = [];
+			squarify(items, 0, 0, L.w, L.h, rects);
+			// Decide resolvability from the rectangles squarify actually
+			// produced, not the uniform-grid estimate above -- a skewed
+			// byte distribution can put a real record below the pixel floor
+			// even when the block-level average looked fine.
+			const minSide = rects.reduce((m, r) => Math.min(m, r.w, r.h), Infinity);
+			if (rects.length === n && minSide >= 2.5) cellRects = rects;
+		}
+
+		if (cellRects) {
+			cellRects.forEach((rect) => {
+				const r = rect.node;
 				// A record with no decodable timestamp has no recency to encode --
 				// giving it a computed age would draw a number the repo never
 				// supplied. Use one fixed neutral tone off the recency ramp instead,
@@ -190,10 +218,16 @@ export function buildTreemap(records, { w, h, weigh, hueOf }) {
 					? `hsl(${hue} 12% 50%)`
 					: `hsl(${hue} ${(20 + 70 * (1 - age)).toFixed(0)}% ${(44 + 18 * age).toFixed(0)}%)`;
 				block.cells.push({
-					x: (i % cols) * cw,
-					y: Math.floor(i / cols) * ch,
-					w: Math.max(1, cw - 1),
-					h: Math.max(1, ch - 1),
+					x: rect.x,
+					y: rect.y,
+					w: Math.max(1, rect.w - 1),
+					h: Math.max(1, rect.h - 1),
+					// the exact, gapless tile squarify laid this record on --
+					// what draws is inset by 1px for visual separation, but
+					// hit testing needs the true tile so there is no dead
+					// space between cells (see hittest.js)
+					pitchW: rect.w,
+					pitchH: rect.h,
 					color,
 					col: r.col,
 					rkey: r.rkey,

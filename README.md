@@ -3,9 +3,11 @@
 See where an atproto repo's bytes actually go, then act on what you find.
 
 Enter any handle or DID and the tool reads that repo in full, straight from its
-PDS in your browser, and draws it as a treemap: one cell per record, area
-proportional to the bytes it actually occupies. Sign in with your own atproto
-account and you can edit or delete your own records.
+PDS in your browser, and draws it as a treemap: one cell per record, each
+cell's own area proportional to the bytes that record actually occupies (or to
+record count, toggled by the "sized by" control) — not just its collection's
+share of the whole. Sign in with your own atproto account and you can edit or
+delete your own records.
 
 Everything runs client-side. There is no server, no proxy, and no credential
 ever leaves your browser — public repo reads need no authentication at all, and

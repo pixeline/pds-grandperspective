@@ -93,4 +93,68 @@ describe('buildTreemap', () => {
 		// off the recency ramp: not derived from (newest - ts) / span
 		expect(undatedCell.color).toBe('hsl(180 12% 50%)');
 	});
+
+	// Important 2: block-level area was already proportional to bytes, but
+	// inside a block cells sat on a uniform grid -- a record's own size was
+	// never consulted, so a 100,000 B record and a 100 B record in the same
+	// collection drew identically. Cells are now themselves squarified by the
+	// record's own weight, so this must hold one level down from the block.
+	it('within one collection, gives a record ~1000x the bytes of another ~1000x the drawn area when weighing by bytes', () => {
+		const records = [
+			{ col: 'a.b.c', ts: 1, rkey: 'big', bytes: 100000, errs: 0, errNames: [] },
+			{ col: 'a.b.c', ts: 2, rkey: 'small', bytes: 100, errs: 0, errNames: [] }
+		];
+		const { hueOf } = collectionHues(records);
+		// A 1000:1 weight ratio between exactly two records forces the smaller
+		// one into a full-height sliver just a fraction of a pixel wide in a
+		// modest-sized block -- squarify's area-conservation is still exact
+		// (area ratio 1000 regardless of container size), but the *shape*
+		// legitimately fails the 2.5px pixel floor at typical canvas sizes.
+		// A large container keeps the sliver's thin dimension above that
+		// floor so the two-record case resolves rather than aggregating.
+		const { blocks } = buildTreemap(records, { w: 20000, h: 20000, weigh: 'bytes', hueOf });
+		const block = blocks.find((b) => b.nsid === 'a.b.c');
+		const big = block.cells.find((c) => c.rkey === 'big');
+		const small = block.cells.find((c) => c.rkey === 'small');
+		// use the true tile (pitchW/pitchH), not the 1px-inset drawn size --
+		// the inset is a fixed cosmetic amount that would distort the ratio
+		// disproportionately for the smaller of the two cells
+		const bigArea = big.pitchW * big.pitchH;
+		const smallArea = small.pitchW * small.pitchH;
+		expect(bigArea / smallArea).toBeGreaterThan(900);
+		expect(bigArea / smallArea).toBeLessThan(1100);
+	});
+
+	// The weigh toggle has to mean something at cell level too: switching to
+	// 'records' must erase the bytes-driven area difference above.
+	it('gives cells in the same collection equal area when weighing by record count, regardless of byte size', () => {
+		const records = [
+			{ col: 'a.b.c', ts: 1, rkey: 'big', bytes: 100000, errs: 0, errNames: [] },
+			{ col: 'a.b.c', ts: 2, rkey: 'small', bytes: 100, errs: 0, errNames: [] }
+		];
+		const { hueOf } = collectionHues(records);
+		const { blocks } = buildTreemap(records, { w: 1000, h: 1000, weigh: 'records', hueOf });
+		const block = blocks.find((b) => b.nsid === 'a.b.c');
+		const big = block.cells.find((c) => c.rkey === 'big');
+		const small = block.cells.find((c) => c.rkey === 'small');
+		expect(big.pitchW * big.pitchH).toBeCloseTo(small.pitchW * small.pitchH, 0);
+	});
+
+	// Aggregation must still trigger from actual geometry once cells are
+	// variable-sized, not only from the old uniform cw/ch estimate -- a
+	// severely skewed byte distribution can leave the tiny record's cell
+	// below the pixel floor even when the block's average cell looked fine.
+	it('aggregates the whole block when a skewed byte distribution leaves any cell under the pixel floor', () => {
+		const records = [
+			{ col: 'a.b.c', ts: 1, rkey: 'huge', bytes: 999999, errs: 0, errNames: [] },
+			...Array.from({ length: 40 }, (_, i) => ({
+				col: 'a.b.c', ts: i + 2, rkey: `tiny-${i}`, bytes: 1, errs: 0, errNames: []
+			}))
+		];
+		const { hueOf } = collectionHues(records);
+		const { blocks } = buildTreemap(records, { w: 120, h: 120, weigh: 'bytes', hueOf });
+		const block = blocks.find((b) => b.nsid === 'a.b.c');
+		expect(block.aggregate).toBe(true);
+		expect(block.cells.length).toBe(0);
+	});
 });

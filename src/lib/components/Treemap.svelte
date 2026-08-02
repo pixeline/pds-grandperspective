@@ -71,9 +71,13 @@
 				});
 				continue;
 			}
-			// recover the block's own column count from its pitch, so Up/Down
-			// can step by a row within this block
-			const cols = b.pitchW > 0 ? Math.max(1, Math.round(b.w / b.pitchW)) : 1;
+			// Approximate the block's own column count, so Up/Down can step by
+			// a row within this block. Cells are squarified (variable rect
+			// sizes, not a uniform grid -- see treemap.js), so there is no
+			// exact column count to recover; this is the same aspect-ratio
+			// estimate treemap.js itself uses to decide whether cells can
+			// resolve at all, good enough for keyboard stepping.
+			const cols = Math.max(1, Math.round(Math.sqrt((b.cells.length * b.w) / Math.max(b.h, 1))));
 			for (const c of b.cells) {
 				out.push({
 					x: b.x + c.x,
@@ -88,6 +92,7 @@
 						ts: c.ts,
 						bytes: c.bytes,
 						err: c.err,
+						undated: c.undated,
 						aggregate: false
 					}
 				});
@@ -145,6 +150,12 @@
 			for (const [x, y, rw, rh] of rects) ctx.fillRect(x, y, rw, rh);
 		}
 
+		// True neutral ink (--ink: #171717) is the only chrome colour on
+		// screen; read it rather than hard-coding, since a stale literal here
+		// would quietly drift from the palette (this used to be #161a18, the
+		// retired green-tinted ink) whenever the CSS variable changes.
+		const ink = getComputedStyle(cv).getPropertyValue('--ink').trim() || '#171717';
+
 		// labels last, so no cell paints over them
 		ctx.font = '8.5px "IBM Plex Mono", monospace';
 		ctx.textBaseline = 'top';
@@ -153,14 +164,13 @@
 			const tw = ctx.measureText(b.label).width;
 			ctx.fillStyle = 'rgba(255,255,255,0.84)';
 			ctx.fillRect(b.x, b.y, tw + 6, 12);
-			ctx.fillStyle = '#161a18';
+			ctx.fillStyle = ink;
 			ctx.fillText(b.label, b.x + 3, b.y + 2);
 		}
 
 		// keyboard focus outline, drawn last so it always shows on top
 		if (focusIdx >= 0 && cells[focusIdx]) {
 			const f = cells[focusIdx];
-			const ink = getComputedStyle(cv).getPropertyValue('--ink').trim() || '#161a18';
 			ctx.strokeStyle = ink;
 			ctx.lineWidth = 1;
 			ctx.strokeRect(f.x + 0.5, f.y + 0.5, Math.max(0, f.w - 1), Math.max(0, f.h - 1));

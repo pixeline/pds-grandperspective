@@ -49,16 +49,17 @@ export function buildIndex(blocks, w, h, cellSize = DEFAULT_CELL) {
 			// visually separated, but that leaves the 1px gap dead to the pointer.
 			// Hit test at the full pitch instead, so the grid tiles the block with
 			// no gap; clamp the last column/row so the rect never runs past the
-			// block's own bounds.
+			// block's own bounds. Cells are squarified (variable size, §Important 2),
+			// so the pitch is per-cell (c.pitchW/c.pitchH), not a uniform block-wide value.
 			const ax = b.x + c.x;
 			const ay = b.y + c.y;
-			const aw = Math.min(b.pitchW, b.x + b.w - ax);
-			const ah = Math.min(b.pitchH, b.y + b.h - ay);
+			const aw = Math.min(c.pitchW, b.x + b.w - ax);
+			const ah = Math.min(c.pitchH, b.y + b.h - ay);
 			put({
 				x: ax, y: ay, w: aw, h: ah,
 				hit: {
 					nsid: b.nsid, col: c.col, rkey: c.rkey, ts: c.ts,
-					bytes: c.bytes, err: c.err, aggregate: false
+					bytes: c.bytes, err: c.err, undated: c.undated, aggregate: false
 				}
 			});
 		}
@@ -71,6 +72,7 @@ export function buildIndex(blocks, w, h, cellSize = DEFAULT_CELL) {
  * @param {ReturnType<typeof buildIndex>} index
  * @param {number} x
  * @param {number} y
+ * @returns {import('./types.js').Hit | null}
  */
 export function hitTest(index, x, y) {
 	if (x < 0 || y < 0 || x > index.w || y > index.h) return null;

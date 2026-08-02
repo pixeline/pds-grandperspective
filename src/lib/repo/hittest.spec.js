@@ -3,18 +3,21 @@ import { buildIndex, hitTest } from './hittest.js';
 import { buildTreemap } from './treemap.js';
 import { collectionHues } from './hues.js';
 
-/** Two blocks side by side, four cells each. */
+/**
+ * Two blocks side by side, four cells each. Cells are squarified (variable
+ * size -- see treemap.js), so the true tiling pitch is per-cell, not a
+ * block-level scalar; each cell carries its own pitchW/pitchH.
+ */
 const BLOCKS = [
 	{
 		nsid: 'a.b.left',
 		x: 0, y: 0, w: 100, h: 100,
 		aggregate: false,
-		pitchW: 50, pitchH: 50,
 		cells: [
-			{ x: 0, y: 0, w: 50, h: 50, col: 'a.b.left', rkey: 'lt', ts: 1, bytes: 5, err: '' },
-			{ x: 50, y: 0, w: 50, h: 50, col: 'a.b.left', rkey: 'rt', ts: 2, bytes: 6, err: '' },
-			{ x: 0, y: 50, w: 50, h: 50, col: 'a.b.left', rkey: 'lb', ts: 3, bytes: 7, err: '' },
-			{ x: 50, y: 50, w: 50, h: 50, col: 'a.b.left', rkey: 'rb', ts: 4, bytes: 8, err: '' }
+			{ x: 0, y: 0, w: 50, h: 50, pitchW: 50, pitchH: 50, col: 'a.b.left', rkey: 'lt', ts: 1, bytes: 5, err: '' },
+			{ x: 50, y: 0, w: 50, h: 50, pitchW: 50, pitchH: 50, col: 'a.b.left', rkey: 'rt', ts: 2, bytes: 6, err: '' },
+			{ x: 0, y: 50, w: 50, h: 50, pitchW: 50, pitchH: 50, col: 'a.b.left', rkey: 'lb', ts: 3, bytes: 7, err: '' },
+			{ x: 50, y: 50, w: 50, h: 50, pitchW: 50, pitchH: 50, col: 'a.b.left', rkey: 'rb', ts: 4, bytes: 8, err: '' }
 		]
 	},
 	{
@@ -58,9 +61,18 @@ describe('hitTest', () => {
 		expect(hitTest(index, -5, 10)).toBeNull();
 	});
 
-	it('carries the fields the modal needs', () => {
+	// hittest.js stays deliberately display-shaped -- it never carries
+	// `value`, only enough (col + rkey) for resolveHit.js to look the full
+	// record up. This used to be named "carries the fields the modal needs"
+	// and asserted a subset that omitted `value`, the one field
+	// RecordModal exists to read -- a name that was not true. What this hit
+	// shape actually promises is the identity pair plus display fields; the
+	// modal's real contract (that `value` gets attached before the hit
+	// reaches it) is resolveHit.spec.js's job to prove, not this one's.
+	it('carries the col/rkey identity plus display fields, but never a record value', () => {
 		const hit = hitTest(index, 25, 25);
 		expect(hit).toMatchObject({ col: 'a.b.left', rkey: 'lt', ts: 1, bytes: 5 });
+		expect(hit).not.toHaveProperty('value');
 	});
 
 	it('agrees with a real treemap layout at every cell centre', () => {
@@ -104,9 +116,13 @@ describe('hitTest', () => {
 		const { blocks } = buildTreemap(records, { w: 400, h: 400, weigh: 'records', hueOf });
 		const block = blocks.find((b) => b.nsid === 'a.b.only');
 		const idx = buildIndex(blocks, 400, 400);
+		// equal-weight records ('records' mode) squarified into a square
+		// block produce a regular grid, so the first cell's own pitch is
+		// representative of the whole block's tiling
+		const firstCell = block.cells[0];
 
 		it('has no dead interior along a horizontal sweep (hit-tested at pitch, not drawn size)', () => {
-			const y = block.y + block.pitchH / 2;
+			const y = block.y + firstCell.pitchH / 2;
 			for (let x = block.x + 0.5; x < block.x + block.w; x += 0.5) {
 				expect(hitTest(idx, x, y)).not.toBeNull();
 			}
@@ -115,8 +131,8 @@ describe('hitTest', () => {
 		it('resolves a point that used to fall in the drawn-rect gap to the record whose pitch it sits in', () => {
 			// just inside the pitch boundary of column 0, past where the old
 			// (pitch - 1px) drawn cell used to end -- this used to be dead space
-			const x = block.x + block.pitchW - 0.5;
-			const y = block.y + block.pitchH / 2;
+			const x = block.x + firstCell.pitchW - 0.5;
+			const y = block.y + firstCell.pitchH / 2;
 			const hit = hitTest(idx, x, y);
 			expect(hit).not.toBeNull();
 			expect(hit.rkey).toBe('r0');

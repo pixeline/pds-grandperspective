@@ -15,12 +15,16 @@
 					<tr><td class="k">records</td><td class="v">{info.records}</td></tr>
 				{/if}
 				{#if info.rkey}<tr><td class="k">rkey</td><td class="v">{info.rkey}</td></tr>{/if}
-				{#if info.ts != null}<tr><td class="k">timestamp</td><td class="v">{fmtDate(info.ts)}</td></tr>{/if}
+				{#if info.ts != null}
+					<tr><td class="k">timestamp</td><td class="v">{fmtDate(info.ts)}</td></tr>
+				{:else if info.undated}
+					<tr><td class="k">timestamp</td><td class="v">undated — no TID or createdAt</td></tr>
+				{/if}
 				{#if info.bytes}<tr><td class="k">stored</td><td class="v">{fmtBytes(info.bytes)}</td></tr>{/if}
 				{#if info.err}<tr><td class="k">invalid</td><td class="v">{info.err}</td></tr>{/if}
 			</tbody>
 		</table>
-		<p class="hint">click → open on pdsls.dev</p>
+		<p class="hint">click → open record</p>
 	</div>
 {/if}
 
