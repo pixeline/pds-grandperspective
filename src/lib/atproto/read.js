@@ -1,95 +1,98 @@
-import { jget, resolveIdentity } from './identity.js';
-import { recordTime } from './tid.js';
-import { audit } from './audit.js';
-
-const PAGE_ROUNDS = 80;
-const LANES = 6;
+import { resolveIdentity } from './identity.js';
+import { carUrl, fetchCarBytes, parseRepoCar } from './car.js';
+import { listAllRecords } from './list.js';
 
 /**
- * Read every collection in a repo.
+ * Above this many CAR bytes, stop and ask. Calibrated against a real repo:
+ * pixeline.be holds 186,958 records in a 65.7 MB CAR, so ordinary accounts
+ * never see the prompt.
+ */
+export const DEFAULT_LIMIT_BYTES = 150 * 1024 * 1024;
+
+/**
+ * Read a repo in full.
  *
- * Fair reading matters more than it looks: a sequential scan lets one huge
- * collection (likes, usually, because `app.bsky.*` sorts early) consume the
- * whole record ceiling before the rest are touched. On a real repo that drew
- * 4000 likes and left 181 collections unread. So:
- *   pass 1 samples EVERY collection with a small page, so each one is present;
- *   pass 2 round-robins full pages among the unfinished until the cap.
+ * CAR first: one unauthenticated request returns every record, and each
+ * record's stored size is a measurement rather than an estimate. Exhaustive
+ * listRecords is the fallback for a PDS that blocks or CORS-restricts the sync
+ * endpoint -- it works, but its sizes are JSON lengths, so `exact` is false and
+ * the UI says so.
+ *
+ * There is NO record ceiling. The previous reader sampled ~21 records per
+ * collection, which drew a 186,958-record repo from 4,000 records and rendered
+ * a collection holding 93% of the repo as a sliver. A treemap's only claim is
+ * that area is proportional to size.
  *
  * @param {string} input handle or DID
- * @param {number} cap record ceiling
- * @param {AbortSignal} signal
- * @param {(msg:string)=>void} onProgress
+ * @param {{signal?: AbortSignal,
+ *          onProgress?: (e: {phase: string, bytes?: number, records?: number, message: string}) => void,
+ *          onSizeGate?: (bytes: number) => Promise<boolean>,
+ *          limitBytes?: number, now?: number, fetchImpl?: typeof fetch}} [opts]
  */
-export async function readRepo(input, cap, signal, onProgress) {
-	onProgress('resolving identity');
-	const { did, pds } = await resolveIdentity(input, signal);
+export async function readRepo(input, opts = {}) {
+	const {
+		signal,
+		onProgress,
+		onSizeGate,
+		limitBytes = DEFAULT_LIMIT_BYTES,
+		now = Date.now(),
+		fetchImpl = fetch
+	} = opts;
 
-	onProgress(`reading ${new URL(pds).host}`);
-	const desc = await jget(
-		`${pds}/xrpc/com.atproto.repo.describeRepo?repo=${encodeURIComponent(did)}`,
-		signal
-	);
-	const collections = (desc.collections || []).slice().sort();
-	if (!collections.length) throw new Error('Repo is empty — no collections to read.');
+	const say = (phase, message, extra = {}) => onProgress?.({ phase, message, ...extra });
 
-	const records = [];
-	const errorTally = new Map();
-	const state = collections.map((col) => ({ col, cursor: null, done: false }));
+	say('resolving', 'Resolving identity…');
+	const { did, pds } = await resolveIdentity(input, { signal, fetchImpl });
 
-	async function fetchPage(st, limit) {
-		const u =
-			`${pds}/xrpc/com.atproto.repo.listRecords?repo=${encodeURIComponent(did)}` +
-			`&collection=${encodeURIComponent(st.col)}&limit=${limit}` +
-			(st.cursor ? `&cursor=${encodeURIComponent(st.cursor)}` : '');
-		const j = await jget(u, signal);
-		for (const r of j.records || []) {
-			const rkey = String(r.uri).split('/').pop();
-			const { ts, tid } = recordTime(rkey, r.value);
-			if (ts == null) continue;
-			const errNames = audit(st.col, rkey, r.value, tid);
-			for (const e of errNames) errorTally.set(e, (errorTally.get(e) || 0) + 1);
-			records.push({
-				col: st.col,
-				ts,
-				rkey,
-				errs: errNames.length,
-				errNames,
-				// byte weight of the record as stored, so the survey can size by
-				// what the repo actually costs rather than by record count alone
-				bytes: JSON.stringify(r.value ?? null).length
-			});
-		}
-		st.cursor = j.cursor || null;
-		if (!st.cursor) st.done = true;
-	}
+	let out = null;
+	let source = 'car';
 
-	// pass 1 — breadth, so no collection is invisible
-	const firstLimit = Math.max(10, Math.min(100, Math.ceil(cap / collections.length)));
-	let next = 0;
-	await Promise.all(
-		Array.from({ length: LANES }, async () => {
-			for (;;) {
-				const i = next++;
-				if (i >= state.length || records.length >= cap) return;
-				await fetchPage(state[i], firstLimit);
-				onProgress(
-					`${records.length} records · sampled ${Math.min(i + 1, state.length)}/${state.length} collections`
-				);
+	try {
+		say('receiving', `Reading ${new URL(pds).host}…`, { bytes: 0 });
+
+		const bytes = await fetchCarBytes(carUrl(pds, did), {
+			signal,
+			limitBytes,
+			onSizeGate,
+			fetchImpl,
+			onProgress: (n) => say('receiving', `${(n / 1048576).toFixed(1)} MB`, { bytes: n })
+		});
+
+		say('parsing', 'Parsing repository…', { bytes: bytes.length });
+		out = await parseRepoCar(bytes, {
+			now,
+			onRecord: (_r, n) => {
+				if (n % 500 === 0) say('parsing', `${n} records`, { records: n });
 			}
-		})
-	);
+		});
+	} catch (err) {
+		// the size gate is the user's decision, not a failure to route around
+		if (String(err?.message) === 'size-limit') throw err;
+		if (signal?.aborted) throw err;
 
-	// pass 2 — depth, shared fairly among whatever is left
-	let rounds = 0;
-	while (records.length < cap && state.some((s) => !s.done) && rounds < PAGE_ROUNDS) {
-		for (const st of state) {
-			if (st.done || records.length >= cap) continue;
-			await fetchPage(st, 100);
-			onProgress(`${records.length} records · deepening ${st.col.split('.').pop()}`);
-		}
-		rounds++;
+		source = 'list';
+		say('listing', `CAR unavailable (${err?.message ?? err}) — reading collection by collection…`);
+		out = await listAllRecords(pds, did, {
+			signal,
+			now,
+			fetchImpl,
+			onProgress: (message, records) => say('listing', message, { records })
+		});
 	}
 
-	records.sort((a, b) => a.ts - b.ts);
-	return { did, pds, collections, records, errorTally, truncated: records.length >= cap };
+	const errorTally = new Map();
+	for (const r of out.records) {
+		for (const e of r.errNames) errorTally.set(e, (errorTally.get(e) || 0) + 1);
+	}
+
+	return {
+		did: out.did ?? did,
+		pds,
+		rev: out.rev ?? null,
+		records: out.records,
+		collections: out.collections,
+		exact: source === 'car',
+		errorTally,
+		source
+	};
 }
