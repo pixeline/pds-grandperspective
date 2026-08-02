@@ -20,6 +20,44 @@ function underNamespace(nsid, sel) {
 }
 
 /**
+ * Per-record search haystack, memoised by record identity.
+ *
+ * A `WeakMap` keyed on the record object lets each record pay for its own
+ * `JSON.stringify` at most once, without mutating the record (the rest of the
+ * app reads these objects) and without leaking when a new read replaces the
+ * array wholesale -- the old records become unreachable and the WeakMap
+ * entries collect with them.
+ *
+ * This is computed lazily, on first search, not during the read: most users
+ * never type a query, and eagerly stringifying every record up front would
+ * just move the 187k-JSON.stringify cost from "per keystroke" to "per read"
+ * rather than removing it.
+ *
+ * Semantics are intentionally non-revalidating: once a record's haystack is
+ * cached, later mutations to `r.value` are NOT reflected -- the cached text
+ * from the first search wins. That is safe here because records are replaced
+ * wholesale after a write (see read.js), never mutated in place, so a stale
+ * cache entry is unreachable in practice. If that invariant ever changes,
+ * this cache would need to key on something other than object identity.
+ *
+ * @type {WeakMap<object, string>}
+ */
+const haystackCache = new WeakMap();
+
+/**
+ * @param {any} r
+ * @returns {string}
+ */
+function haystackOf(r) {
+	let hay = haystackCache.get(r);
+	if (hay === undefined) {
+		hay = `${r.col} ${r.rkey} ${r.value ? JSON.stringify(r.value) : ''}`.toLowerCase();
+		haystackCache.set(r, hay);
+	}
+	return hay;
+}
+
+/**
  * @param {Array<any>} records
  * @param {{collections: Set<string>, from: number|null, to: number|null, query: string}} f
  */
@@ -47,8 +85,7 @@ export function applyFilters(records, f) {
 		if (to != null && r.ts > to) continue;
 
 		if (q) {
-			const hay = `${r.col} ${r.rkey} ${r.value ? JSON.stringify(r.value) : ''}`.toLowerCase();
-			if (!hay.includes(q)) continue;
+			if (!haystackOf(r).includes(q)) continue;
 		}
 
 		out.push(r);

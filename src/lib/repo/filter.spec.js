@@ -112,4 +112,45 @@ describe('applyFilters', () => {
 			expect(applyFilters(undated, { ...none, query: 'linkat' }).matched).toBe(1);
 		});
 	});
+
+	describe('haystack caching', () => {
+		it('returns identical results for the same query on a second call', () => {
+			const first = applyFilters(RECORDS, { ...none, query: 'needle' });
+			const second = applyFilters(RECORDS, { ...none, query: 'needle' });
+			expect(second.records.map((r) => r.rkey)).toEqual(first.records.map((r) => r.rkey));
+			expect(second.matched).toBe(first.matched);
+		});
+
+		// Documents the cache's semantics honestly rather than pretending it
+		// revalidates: the haystack is memoised per record object on first
+		// search, so a later mutation of `r.value` does not change what that
+		// record matches. This is safe in this app because records are
+		// replaced wholesale after a write (see read.js), never mutated in
+		// place -- so a stale cache entry is never actually reachable -- but
+		// the assumption is written down here rather than left implicit.
+		it('keeps matching a mutated record against its ORIGINAL cached text', () => {
+			const record = { col: 'a.b.c', rkey: 'x', ts: 0, bytes: 1, value: { note: 'original' } };
+			const records = [record];
+
+			const before = applyFilters(records, { ...none, query: 'original' });
+			expect(before.matched).toBe(1);
+
+			record.value = { note: 'changed' };
+
+			// still matches the stale cached haystack, not the mutated value
+			const stillOld = applyFilters(records, { ...none, query: 'original' });
+			expect(stillOld.matched).toBe(1);
+
+			// does not pick up the new content either -- the cache is not revalidated
+			const notNew = applyFilters(records, { ...none, query: 'changed' });
+			expect(notNew.matched).toBe(0);
+		});
+	});
+
+	it('searches correctly for a record with no value across repeated calls', () => {
+		const record = { col: 'a.b.c', rkey: 'x', ts: 0, bytes: 1 };
+		expect(applyFilters([record], { ...none, query: 'a.b.c' }).matched).toBe(1);
+		expect(applyFilters([record], { ...none, query: 'a.b.c' }).matched).toBe(1);
+		expect(applyFilters([record], { ...none, query: 'zzz' }).matched).toBe(0);
+	});
 });
