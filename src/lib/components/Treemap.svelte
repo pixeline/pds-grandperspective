@@ -1,6 +1,6 @@
 <script>
-	import { buildTreemap } from '$lib/portrait/treemap.js';
-	import { fmtBytes, fmtNum } from '$lib/portrait/params.js';
+	import { buildTreemap } from '$lib/repo/treemap.js';
+	import { fmtBytes, fmtNum } from '$lib/repo/format.js';
 
 	let { records = [], hueOf, weigh = $bindable('bytes'), onhover, onopen } = $props();
 

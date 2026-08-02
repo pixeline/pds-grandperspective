@@ -134,6 +134,7 @@ export function buildTreemap(records, { w, h, weigh, hueOf }) {
 	for (const L of leaves) {
 		if (L.w < 1 || L.h < 1) continue;
 		const nsid = L.node.nsid;
+		if (!nsid) continue; // empty repo: root leaf carries no collection, draw nothing
 		const recs = byCol.get(nsid) || [];
 		const n = recs.length;
 		const hue = hueOf.get(nsid) ?? 0;

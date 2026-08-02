@@ -1,6 +1,6 @@
 <script>
 	import Typeahead from './Typeahead.svelte';
-	import { PARAMS, fmtBytes, fmtNum } from '$lib/portrait/params.js';
+	import { fmtBytes, fmtNum } from '$lib/repo/format.js';
 
 	let {
 		handle = $bindable(''),

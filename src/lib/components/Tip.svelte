@@ -1,5 +1,5 @@
 <script>
-	import { fmtBytes, fmtDate, fmtDur } from '$lib/portrait/params.js';
+	import { fmtBytes, fmtDate, fmtDur } from '$lib/repo/format.js';
 
 	/** @type {{info:any, hueOf:Map<string,number>}} */
 	let { info, hueOf } = $props();
