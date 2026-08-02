@@ -121,7 +121,11 @@
 					<tr><td class="k">stored size</td><td class="v">{fmtBytes(stats.bytes)}</td></tr>
 					<tr>
 						<td class="k">sizes</td>
-						<td class="v">{stats.exact ? 'measured (CAR)' : 'estimated (listRecords)'}</td>
+						<td class="v">
+							{stats.source === 'car' ? 'measured (CAR)' : 'estimated (listRecords)'}{#if stats.editedCount}
+								· {stats.editedCount} record{stats.editedCount > 1 ? 's' : ''} edited
+							{/if}
+						</td>
 					</tr>
 					{#if stats.rev}
 						<tr><td class="k">revision</td><td class="v">{stats.rev}</td></tr>
