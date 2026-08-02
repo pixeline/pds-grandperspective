@@ -226,19 +226,76 @@ measurement is in use, so an estimate is never presented as a measurement.
 Retaining `value` serves both full-content search (§5) and the record modal (§9), which
 then needs no second fetch and cannot disagree with what the map measured.
 
-### 3.5 Size warning
+### 3.5 Size gate — measured, not assumed
 
-No silent truncation, ever. Before committing to a large read, establish the size —
-`Content-Length` on the CAR response, or a `describeRepo` probe on the fallback — and if it
-exceeds a threshold, state the real figures and let the user choose:
+**`Content-Length` is not available.** Verified against `eurosky.social`: `getRepo` responds
+`200 application/vnd.ipld.car` with **no `Content-Length`** — the body is chunked. So the
+size cannot be known before the download starts, and an up-front "this repo is N MB,
+continue?" prompt is not implementable.
 
-> `≈240 MB · ~180,000 records. Reading this fully will use roughly that much memory.
-> Read it all / Cancel`
+What is implementable, and is what this spec requires: **stream the body and count.** Read
+`res.body.getReader()`, accumulate chunks, and publish a running byte total (which the
+firehose in §12 is already displaying). If the running total crosses a threshold, pause and
+ask — the download can still be aborted at that point via the `AbortController` already
+threaded through the read path.
 
-If they decline, they have still learned the repo's true size, which is a legitimate answer
-from a disk-usage tool. What they are never given is a map that looks complete and is not.
+Threshold, calibrated against a real measurement rather than guessed (§3.7): **150 MB**.
+`pixeline.be` — 186,958 records, one of the larger personal repos — produces a 65.7 MB CAR,
+so ordinary accounts never see the prompt. Above 150 MB:
 
-### 3.6 Unchanged
+> `Read so far: 152 MB. This repo is unusually large and will use roughly
+> 4× that in memory. Continue / Stop and show what has loaded`
+
+Whichever they choose, they are told what was read. What they are never given is a map that
+looks complete and is not.
+
+### 3.6 Verified pipeline
+
+The CAR path is proven end to end against a live repo, not assumed. `ReadableRepo` is
+**not** re-exported from the package index — `Repo` is, and inherits the static `load`:
+
+```js
+import { readCarWithRoot, MemoryBlockstore, Repo } from '@atproto/repo';
+
+const { root, blocks } = await readCarWithRoot(bytes);
+const repo = await Repo.load(new MemoryBlockstore(blocks), root);
+// repo.did, repo.commit.rev
+
+for await (const { collection, rkey, cid, record } of repo.walkRecords()) {
+  const storedBytes = blocks.get(cid)?.length ?? 0;   // true DAG-CBOR block length
+}
+```
+
+### 3.7 Measured against `pixeline.be`
+
+All figures below are from an actual run, and several are load-bearing:
+
+| Measurement | Value |
+|---|---|
+| Records in repo | **186,958** |
+| Collections | 195 |
+| CAR download | 65.7 MB in 6.5 s |
+| Blocks in CAR | 236,541 (records + MST nodes) |
+| Record bytes, stored | 41.7 MB |
+| MST walk | 4.0 s for all 186,958 records |
+| Heap retained, values kept | 226 MB |
+| CORS on `getRepo` | `access-control-allow-origin: *` |
+
+**The old reader read 4,000 of 186,958 records — 2.1% of the repo.** `app.bsky.feed.like`
+alone is 174,041 records (93% of all records, 89% of all stored bytes) and was being drawn
+from a sample of 21. The treemap was rendering the dominant 89% of the repo as a sliver
+indistinguishable from a collection holding a single record. §3.1 described this defect;
+these are its actual dimensions.
+
+**`stored` vs `JSON.stringify` length** runs 1.06×–1.14× depending on collection. So the
+fallback path's estimate is not wildly wrong in total, but it is wrong *unevenly between
+collections* — which is exactly the axis a treemap encodes. Another reason the CAR path is
+primary and the fallback is labelled.
+
+**CORS is not a risk for the owner's own PDS.** `eurosky.social` sends `*`. The risk in §16
+stands for arbitrary self-hosted PDSs, but the motivating case is confirmed working.
+
+### 3.8 Unchanged
 
 **Scoped auditing** stays exactly as it is: rules apply only to what a lexicon actually
 promises. Judging non-Bluesky lexicons by `app.bsky`'s schema produced 304 false "invalid
@@ -724,7 +781,7 @@ deploy:
   delete button in that modal, wrong-record is not a cosmetic failure. Hence dedicated
   coverage in §15.
 - **Memory on large repos.** Reading in full and retaining `value` means a large account's
-  records live in the tab. Mitigated by the up-front size warning (§3.5), not by silent
+  records live in the tab. Mitigated by the streaming size gate (§3.5) and bounded by a real measurement — 226 MB heap for a 187k-record repo (§3.7), not by silent
   truncation. The threshold needs calibrating against a real large repo, not guessed.
 - **CAR endpoint availability.** `getRepo` may be blocked, rate-limited, or CORS-restricted
   even where `listRecords` works. Hence the fallback — but the fallback yields estimated
