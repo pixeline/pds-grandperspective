@@ -17,16 +17,22 @@
 
 <style>
 	:global(:root) {
-		/* atmospheric: near-white ground so the portrait reads as suspended in air */
-		--ground: #f6f8f7;
-		--ground-deep: #ecefed;
-		--ink: #161a18;
-		--ink-soft: #6e7672;
-		--rule: #e2e7e4;
+		/* true neutrals: the only hue on screen comes from the repo. The old
+		   greens were deliberate when the brief wanted the portrait "suspended
+		   in air"; that framing is retired with the stack. */
+		--ground: #f7f7f7;
+		--ground-deep: #ededed;
+		--ink: #171717;
+		--ink-soft: #737373;
+		--rule: #e4e4e4;
 		--paper: #ffffff;
 	}
 	:global(*) {
 		box-sizing: border-box;
+		/* International Style applied to data: no ornament that carries no
+		   information. Enforced by a test, because standing constraints decay. */
+		border-radius: 0;
+		box-shadow: none;
 	}
 	:global(html),
 	:global(body) {
@@ -38,5 +44,11 @@
 		color: var(--ink);
 		font-family: 'Archivo', system-ui, sans-serif;
 		overflow: hidden;
+	}
+	@media (prefers-reduced-motion: reduce) {
+		:global(*) {
+			animation-duration: 0.01ms !important;
+			transition-duration: 0.01ms !important;
+		}
 	}
 </style>
