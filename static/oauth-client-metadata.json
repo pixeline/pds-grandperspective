@@ -1,0 +1,12 @@
+{
+	"client_id": "https://pixeline.be/pds-grandperspective/oauth-client-metadata.json",
+	"client_name": "GrandPerspective — PDS edition",
+	"client_uri": "https://pixeline.be/pds-grandperspective/",
+	"redirect_uris": ["https://pixeline.be/pds-grandperspective/"],
+	"grant_types": ["authorization_code", "refresh_token"],
+	"response_types": ["code"],
+	"scope": "atproto repo:*?action=update&action=delete",
+	"token_endpoint_auth_method": "none",
+	"application_type": "web",
+	"dpop_bound_access_tokens": true
+}

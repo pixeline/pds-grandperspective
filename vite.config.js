@@ -18,6 +18,13 @@ export default defineConfig({
 			paths: { relative: true }
 		})
 	],
+	server: {
+		// the OAuth loopback client requires the literal IP; the spec rejects
+		// the hostname `localhost` as a redirect target. The port is left to
+		// .claude/launch.json, which already pins 5199 -- any port works, the
+		// host is the part that matters.
+		host: '127.0.0.1'
+	},
 	test: {
 		expect: { requireAssertions: true },
 		projects: [
