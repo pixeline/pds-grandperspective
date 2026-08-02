@@ -100,4 +100,24 @@ describe('readRepo', () => {
 		const fetchImpl = async () => new Response('no', { status: 400 });
 		await expect(readRepo('nope.test', { fetchImpl, now: NOW })).rejects.toThrow();
 	});
+
+	it('propagates an aborted signal instead of falling back to listRecords', async () => {
+		const controller = new AbortController();
+		controller.abort();
+		// listRecords would succeed if reached, so a missing abort guard would make
+		// readRepo resolve instead of reject.
+		const listRecords = vi.fn(() => ok({ records: [] }));
+		const fetchImpl = routes({
+			car: () => {
+				throw new Error('The operation was aborted');
+			},
+			describeRepo: () => ok({ collections: ['a.b.c'] }),
+			listRecords
+		});
+
+		await expect(
+			readRepo('alice.test', { fetchImpl, now: NOW, signal: controller.signal })
+		).rejects.toThrow();
+		expect(listRecords).not.toHaveBeenCalled();
+	});
 });
