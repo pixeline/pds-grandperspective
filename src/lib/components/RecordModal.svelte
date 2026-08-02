@@ -10,6 +10,9 @@
 	import { tidToMs } from '$lib/atproto/tid.js';
 	import { SvelteSet } from 'svelte/reactivity';
 
+	/** @type {{record: import('$lib/repo/types.js').ModalRecord | null, did: string | null,
+	 *          agent: any, canWrite: boolean, isOwnRepo: boolean,
+	 *          onclose?: () => void, onchanged?: (e: {action: 'updated'|'deleted', record: any, value?: any}) => void}} */
 	let {
 		record = null,
 		did = null,
@@ -99,9 +102,12 @@
 	const writable = $derived(isOwnRepo && canWrite && !!agent && !record?.aggregate);
 
 	const tidTime = $derived(record?.rkey ? tidToMs(record.rkey) : null);
-	const claimed = $derived(
-		record?.value?.createdAt ? Date.parse(record.value.createdAt) : null
-	);
+	// `value` only exists on the non-aggregate half of ModalRecord --
+	// `record?.value` doesn't narrow that away, so check `aggregate` first
+	const claimed = $derived.by(() => {
+		if (!record || record.aggregate) return null;
+		return record.value?.createdAt ? Date.parse(record.value.createdAt) : null;
+	});
 	// the TID is server-assigned, createdAt is user-claimed; a disagreement is
 	// information, not noise, so it is shown rather than resolved away
 	const skewed = $derived(
@@ -121,6 +127,11 @@
 	);
 
 	function startEdit() {
+		// Edit is only ever rendered for a writable, non-aggregate record (see
+		// `writable` above), but that guard lives in the template -- narrow it
+		// here too, both for null-safety and so `record.value` (required only
+		// on the non-aggregate half of ModalRecord) typechecks.
+		if (!record || record.aggregate) return;
 		text = JSON.stringify(record.value, null, 2);
 		problem = null;
 		editing = true;
@@ -132,6 +143,7 @@
 		// while the request is in flight (the parent can select a different
 		// cell), so every reference below must use this local, not the prop.
 		const target = record;
+		if (!target || target.aggregate || !did) return;
 		const key = keyOf(target);
 		const check = validateEdit(target.value, text);
 		if (!check.ok) {
@@ -179,6 +191,7 @@
 		// awaiting, so a mid-flight selection change can't misattribute the
 		// result to whatever happens to be selected when the response lands.
 		const target = record;
+		if (!target || target.aggregate || !did) return;
 		const key = keyOf(target);
 		try {
 			const outcome = await guardedWrite(inFlight, key, async () => {
@@ -209,6 +222,7 @@
 	}
 
 	function pdsls() {
+		if (!record) return;
 		const url = `https://pdsls.dev/at://${did}/${record.col}/${record.rkey}`;
 		// a synthetic link, not window.open: a features string makes it a popup,
 		// which blockers kill silently
@@ -252,7 +266,7 @@
 					<dd>{fmtDate(claimed)}{skewed ? ' — disagrees with the TID' : ''}</dd>
 				</div>
 			{/if}
-			{#if record.err}
+			{#if !record.aggregate && record.err}
 				<div><dt>errors</dt><dd>{record.err}</dd></div>
 			{/if}
 		</dl>

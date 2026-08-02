@@ -28,6 +28,7 @@ const MAX_PAGES_PER_COLLECTION = 4000;
  * @param {string} did
  * @param {{signal?: AbortSignal, onProgress?: (msg: string, n: number) => void,
  *          now?: number, fetchImpl?: typeof fetch}} [opts]
+ * @returns {Promise<{records: import('../repo/types.js').RepoRecord[], collections: string[]}>}
  */
 export async function listAllRecords(pds, did, opts = {}) {
 	const { signal, onProgress, now = Date.now(), fetchImpl = fetch } = opts;

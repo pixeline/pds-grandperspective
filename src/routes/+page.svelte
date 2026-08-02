@@ -10,6 +10,7 @@
 	import { createSessionStore } from '$lib/atproto/session.svelte.js';
 	import { collectionHues } from '$lib/repo/hues.js';
 	import { applyFilters } from '$lib/repo/filter.js';
+	import { resolveHit } from '$lib/repo/resolveHit.js';
 	import { defaultState, fromHash, toHash } from '$lib/repo/urlstate.js';
 
 	const session = createSessionStore();
@@ -18,32 +19,61 @@
 	let weigh = $state('bytes');
 	let filters = $state({ collections: new Set(), from: null, to: null, query: '' });
 
+	// Critical 1 survived three review rounds partly because these were
+	// `$state(null)` with no annotation: TypeScript infers `null`, narrows
+	// every later read of `data.records` etc. to `never`, and gives up on
+	// the whole file rather than catching a mis-shaped value in `selected`.
+	// Annotating the shapes that actually flow through these is what makes
+	// passing a raw (valueless) hit to RecordModal a compile error again.
+	/** @type {Awaited<ReturnType<typeof readRepo>> | null} */
 	let data = $state(null);
+	/** @type {ReturnType<typeof collectionHues> | null} */
 	let hues = $state(null);
 	let status = $state('idle');
 	let busy = $state(false);
+	/** @type {string | null} */
 	let error = $state(null);
+	/** @type {import('$lib/repo/types.js').Hit | null} */
 	let hover = $state(null);
+	/** @type {import('$lib/repo/types.js').ModalRecord | null} */
 	let selected = $state(null);
 	let entered = $state(false);
+	// Keys (`col/rkey`) of records edited in this session, kept separate from
+	// `data.exact`/`data.source` -- see the stats derivation below for why.
+	let editedKeys = $state(new Set());
 
 	// firehose state
 	let phase = $state('resolving');
 	let gotBytes = $state(0);
 	let gotRecords = $state(0);
+	/** @type {Array<{ts: number|null, col: string, rkey: string, bytes: number}>} */
 	let lines = $state([]);
 	let startedAt = $state(0);
 	let elapsed = $state(0);
 
+	/** @type {AbortController | null} */
 	let ac = null;
+	/** @type {ReturnType<typeof setInterval> | null} */
 	let ticker = null;
 
-	const filtered = $derived(data ? applyFilters(data.records, filters) : null);
-	const legend = $derived(
+	// `.by(() => ...)` rather than a bare `$derived(expr)`: at the top level of
+	// the script block, `expr` runs in the SAME linear control flow as the
+	// `let data = $state(null)` declaration a few lines up, so TypeScript's
+	// flow analysis (correctly, for that literal position) narrows `data` to
+	// exactly `null` -- there is no other code between the two lines that
+	// could have assigned anything else -- and `data ? data.records : ...`
+	// narrows the truthy branch to `never`. Wrapping the expression in a
+	// closure is what makes TS use the annotated type instead: a closure can
+	// run after `data` has been reassigned (in `draw()`, `onchanged()`), so TS
+	// falls back to the declared type rather than the point-in-time flow type.
+	const filtered = $derived.by(() => (data ? applyFilters(data.records, filters) : null));
+	const legend = $derived.by(() =>
 		hues ? [...hues.shares.entries()].sort((a, b) => b[1] - a[1]) : []
 	);
-	const errors = $derived(data ? [...data.errorTally.entries()].sort((a, b) => b[1] - a[1]) : []);
-	const isOwnRepo = $derived(!!session.did && !!data && session.did === data.did);
+	const errors = $derived.by(() =>
+		data ? [...data.errorTally.entries()].sort((a, b) => b[1] - a[1]) : []
+	);
+	const isOwnRepo = $derived.by(() => !!session.did && !!data && session.did === data.did);
 
 	const stats = $derived.by(() => {
 		if (!data || !filtered) return null;
@@ -55,6 +85,15 @@
 			matched: filtered.matched,
 			bytes: filtered.totalBytes,
 			exact: data.exact,
+			// `source` is the read path ('car' | 'list') and never changes after
+			// an edit -- unlike `exact`, which onchanged() recomputes across all
+			// records. Rail needs both: the path is what "measured (CAR)" /
+			// "estimated (listRecords)" actually describes, and editedCount is
+			// reported alongside it rather than folded into the same claim, so
+			// editing one record after a CAR read cannot make the rail say the
+			// whole 187,000-record read came from listRecords.
+			source: data.source,
+			editedCount: editedKeys.size,
 			rev: data.rev,
 			invalid,
 			invalidPct: data.records.length
@@ -93,13 +132,14 @@
 		error = null;
 		hover = null;
 		selected = null;
+		editedKeys = new Set();
 		gotBytes = 0;
 		gotRecords = 0;
 		lines = [];
 		phase = 'resolving';
 		startedAt = Date.now();
 		elapsed = 0;
-		clearInterval(ticker);
+		clearInterval(ticker ?? undefined);
 		ticker = setInterval(() => (elapsed = Date.now() - startedAt), 100);
 
 		try {
@@ -123,12 +163,22 @@
 			hues = collectionHues(d.records);
 			data = d;
 			gotRecords = d.records.length;
-			// the firehose showed real records; end on the true final lines
-			lines = d.records.slice(-24).map((r) => ({
+			// The firehose showed real records; end on the true final lines --
+			// but d.records is ts-sorted with undated records (no TID, no
+			// createdAt) pushed last (car.js), so a plain slice(-24) shows the
+			// chronologically newest records only when there are fewer than 24
+			// undated ones. On a repo whose undated count meets or exceeds 24
+			// (pixeline.be has exactly 25) every final line would be undated --
+			// representative of nothing. Prefer the newest DATED records for
+			// this freeze-frame; fall back to the raw tail only if the repo
+			// does not have 24 dated records to show.
+			const dated = d.records.filter((r) => r.ts != null);
+			const finalFrame = dated.length >= 24 ? dated.slice(-24) : d.records.slice(-24);
+			lines = finalFrame.map((r) => ({
 				ts: r.ts, col: r.col, rkey: r.rkey, bytes: r.bytes
 			}));
 			status = d.exact ? 'read complete (measured)' : 'read complete (estimated)';
-		} catch (err) {
+		} catch (/** @type {any} */ err) {
 			if (mine.signal.aborted) {
 				status = 'stopped';
 				return;
@@ -140,21 +190,31 @@
 					: String(err?.message ?? err);
 		} finally {
 			busy = false;
-			clearInterval(ticker);
+			clearInterval(ticker ?? undefined);
 		}
 	}
 
+	/** @param {{action: 'updated'|'deleted', record: {col: string, rkey: string}, value?: any}} e */
 	function onchanged({ action, record, value }) {
 		if (!data) return;
 		let records = data.records;
+		const key = `${record.col}/${record.rkey}`;
 		if (action === 'deleted') {
 			records = records.filter((r) => r.rkey !== record.rkey || r.col !== record.col);
+			// the record is gone; it can no longer be "an edited record" in the
+			// rail's count
+			const next = new Set(editedKeys);
+			next.delete(key);
+			editedKeys = next;
 		} else if (action === 'updated') {
 			records = records.map((r) =>
 				r.rkey === record.rkey && r.col === record.col
 					? { ...r, value, bytes: JSON.stringify(value).length, exact: false }
 					: r
 			);
+			const next = new Set(editedKeys);
+			next.add(key);
+			editedKeys = next;
 		}
 		// data.exact is the aggregate "measured (CAR) / estimated" label the Rail
 		// shows; each record already carries its own exact flag (true from the
@@ -162,8 +222,44 @@
 		// Recompute it from the records rather than leaving it pinned to
 		// whatever the initial read was, or an edit after a fully-measured CAR
 		// read would still claim everything is measured.
+		//
+		// `data.source` (the read path: 'car' | 'list') is NOT recomputed here --
+		// it is provenance, fixed by which reader actually ran, and does not
+		// change just because a record was edited afterward. Rail.svelte reads
+		// `source` for the "measured (CAR)"/"estimated (listRecords)" label and
+		// `editedCount` (derived from `editedKeys` above) separately, rather
+		// than collapsing both into one boolean that can misname the read path.
 		data = { ...data, records, exact: records.every((r) => r.exact !== false) };
 		hues = collectionHues(data.records);
+	}
+
+	/** @param {import('$lib/repo/types.js').Hit | null} h */
+	function onHover(h) {
+		hover = h;
+	}
+
+	/** @param {import('$lib/repo/types.js').Hit | null} h */
+	function onOpen(h) {
+		// only reachable from <Treemap>, which is only rendered once `data` is
+		// set (`{:else if data && hues && filtered}` below) -- but that template
+		// guard doesn't narrow `data`'s type inside this closure (see the
+		// `$derived.by` note above for why closures fall back to the declared,
+		// nullable type), so check again here rather than asserting it away.
+		if (data) selected = resolveHit(h, data.records);
+	}
+
+	/** @param {string} who */
+	function onPick(who) {
+		draw(who);
+	}
+
+	// `h`/`session.signIn` deliberately left untyped: session.svelte.js has its
+	// own pre-existing implicit-any/never issues (unannotated $state, same as
+	// Critical 1's root cause but in a file this fix wave does not touch) that
+	// make an explicit `string` annotation here fight a mismatched inferred
+	// signature on the other side. Out of scope for this pass.
+	function onSignIn(h) {
+		session.signIn(h);
 	}
 
 	onMount(async () => {
@@ -202,14 +298,14 @@
 			{session}
 			ondraw={draw}
 			onstop={() => ac?.abort()}
-			onsignin={(h) => session.signIn(h)}
+			onsignin={onSignIn}
 			onsignout={() => session.signOut()}
 		/>
 	{/if}
 
 	<main class="stage">
 		{#if !entered}
-			<Gate bind:handle onpick={(who) => draw(who)} />
+			<Gate bind:handle onpick={onPick} />
 		{:else if busy}
 			<Firehose
 				{phase}
@@ -225,8 +321,8 @@
 				hueOf={hues.hueOf}
 				bind:weigh
 				exact={data.exact}
-				onhover={(h) => (hover = h)}
-				onopen={(h) => (selected = h)}
+				onhover={onHover}
+				onopen={onOpen}
 			/>
 			<Tip info={hover} hueOf={hues.hueOf} />
 		{/if}
@@ -246,7 +342,7 @@
 
 <RecordModal
 	record={selected}
-	did={data?.did}
+	did={data?.did ?? null}
 	agent={session.agent}
 	canWrite={session.canWrite}
 	{isOwnRepo}

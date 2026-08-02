@@ -28,6 +28,9 @@ export const DEFAULT_LIMIT_BYTES = 150 * 1024 * 1024;
  *          onProgress?: (e: {phase: string, bytes?: number, records?: number, message: string}) => void,
  *          onSizeGate?: (bytes: number) => Promise<boolean>,
  *          limitBytes?: number, now?: number, fetchImpl?: typeof fetch}} [opts]
+ * @returns {Promise<{did: string, pds: string, rev: string|null,
+ *          records: import('../repo/types.js').RepoRecord[], collections: string[],
+ *          exact: boolean, errorTally: Map<string, number>, source: 'car'|'list'}>}
  */
 export async function readRepo(input, opts = {}) {
 	const {

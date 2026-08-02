@@ -80,7 +80,8 @@ export async function fetchCarBytes(url, opts = {}) {
  * JSON estimate.
  *
  * @param {Uint8Array} bytes
- * @param {{now?: number, onRecord?: (r: any, n: number) => void}} [opts]
+ * @param {{now?: number, onRecord?: (r: import('../repo/types.js').RepoRecord, n: number) => void}} [opts]
+ * @returns {Promise<{did: string, rev: string, records: import('../repo/types.js').RepoRecord[], collections: string[]}>}
  */
 export async function parseRepoCar(bytes, opts = {}) {
 	const { now = Date.now(), onRecord } = opts;
