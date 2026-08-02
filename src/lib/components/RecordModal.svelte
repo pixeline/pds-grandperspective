@@ -20,26 +20,46 @@
 	let problem = $state(null);
 	let busy = $state(false);
 
-	// Instance state (confirming/editing/text/problem) belongs to whichever
-	// record last touched it. Task 18 mounts this modal once and swaps the
-	// `record` prop rather than destroying the instance between records, so
-	// nothing here resets on its own. Track the record's identity in a plain
-	// (non-reactive) variable and reset per-record state whenever it changes
-	// -- including transitions to and from null, which is what makes closing
-	// the modal (by any path) also clear a stale `confirming`/`editing`.
-	// Without this, confirming a delete on record A and then opening record B
-	// lands straight on "Confirm delete" for B, and an in-progress edit of A
-	// leaves A's text sitting in the textarea under B's header.
+	// Instance state (confirming/editing/text/problem/busy) belongs to
+	// whichever record last touched it. Task 18 mounts this modal once and
+	// swaps the `record` prop rather than destroying the instance between
+	// records, so nothing here resets on its own. `keyOf` is the one
+	// definition of "same record" shared by this effect and by the
+	// post-await checks in save()/remove() below -- it must stay a single
+	// function rather than three copies of the string concatenation.
+	/** @param {any} r */
+	function keyOf(r) {
+		return r ? `${r.col}/${r.rkey}` : null;
+	}
+
+	// Track the record's identity in a plain (non-reactive) variable and
+	// reset per-record state whenever it changes -- including transitions to
+	// and from null, which is what makes closing the modal (by any path)
+	// also clear a stale `confirming`/`editing`. Without this, confirming a
+	// delete on record A and then opening record B lands straight on
+	// "Confirm delete" for B, and an in-progress edit of A leaves A's text
+	// sitting in the textarea under B's header.
+	//
+	// `busy` is reset here too: it describes whether *the record now on
+	// screen* has a write in flight, not whether this component instance
+	// ever kicked one off. A's write finishing is not B's concern, and
+	// waiting for it to settle before B's controls unstick would leave B
+	// stuck for no reason B caused. A's own in-flight request is unaffected
+	// by this reset -- it keeps running against the `target` it captured in
+	// save()/remove(), and its post-await code below independently checks
+	// whether it is still looking at the record it started on before
+	// touching any of this shared display state again.
 	/** @type {string|null} */
 	let lastKey = null;
 	$effect(() => {
-		const key = record ? `${record.col}/${record.rkey}` : null;
+		const key = keyOf(record);
 		if (key === lastKey) return;
 		lastKey = key;
 		confirming = false;
 		editing = false;
 		text = '';
 		problem = null;
+		busy = false;
 	});
 
 	const writable = $derived(isOwnRepo && canWrite && !!agent && !record?.aggregate);
@@ -88,12 +108,21 @@
 		try {
 			await putRecord(agent, { did, col: target.col, rkey: target.rkey, value: check.value });
 			onchanged?.({ action: 'updated', record: target, value: check.value });
-			editing = false;
+			// The write is pinned to `target`, but busy/editing are still
+			// shared display state. Only touch them if the modal is still
+			// showing the record this write was about -- otherwise it
+			// completes silently (onchanged has already fired with the
+			// pinned target) and whatever is now on screen is left alone.
+			if (keyOf(target) === keyOf(record)) {
+				editing = false;
+				busy = false;
+			}
 		} catch (/** @type {any} */ e) {
-			// surface the XRPC error verbatim and leave local state untouched
-			problem = String(e?.message ?? e);
-		} finally {
-			busy = false;
+			if (keyOf(target) === keyOf(record)) {
+				// surface the XRPC error verbatim and leave local state untouched
+				problem = String(e?.message ?? e);
+				busy = false;
+			}
 		}
 	}
 
@@ -107,12 +136,20 @@
 		try {
 			await deleteRecord(agent, { did, col: target.col, rkey: target.rkey });
 			onchanged?.({ action: 'deleted', record: target });
-			onclose?.();
+			// Only close (and only clear busy) if the modal is still showing
+			// the record that was just deleted. If the parent moved on to a
+			// different record while this delete was in flight, closing now
+			// would yank that other record's modal out from under the user.
+			if (keyOf(target) === keyOf(record)) {
+				busy = false;
+				onclose?.();
+			}
 		} catch (/** @type {any} */ e) {
-			problem = String(e?.message ?? e);
-			confirming = false;
-		} finally {
-			busy = false;
+			if (keyOf(target) === keyOf(record)) {
+				problem = String(e?.message ?? e);
+				confirming = false;
+				busy = false;
+			}
 		}
 	}
 

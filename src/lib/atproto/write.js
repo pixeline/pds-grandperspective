@@ -49,6 +49,9 @@ export function validateEdit(originalValue, text) {
 	return { ok: true, value: parsed };
 }
 
+/** Bound on how long a write waits for a response before giving up on it. */
+const WRITE_TIMEOUT_MS = 30_000;
+
 /**
  * Post an XRPC procedure through the OAuth session.
  *
@@ -57,16 +60,53 @@ export function validateEdit(originalValue, text) {
  * keeps a third runtime dependency out of the project, and DPoP, token refresh
  * and nonce handling are all inside the handler already.
  *
+ * A write that never settles -- a hung connection, a stuck DPoP nonce retry --
+ * would otherwise leave the caller waiting forever with no way to back out.
+ * `RecordModal` blocks its own close controls while a write is in flight
+ * (deliberately: closing mid-write is what used to let a failure go
+ * unseen), so an unbounded wait here would make the modal permanently
+ * unclosable rather than just briefly so. The `AbortController` cancels the
+ * underlying request when the timer fires; the `Promise.race` guarantees the
+ * caller hears about it even if `fetchHandler` doesn't itself observe abort.
+ *
  * @param {any} session
  * @param {string} nsid
  * @param {any} body
  */
 async function procedure(session, nsid, body) {
-	const res = await session.fetchHandler(`/xrpc/${nsid}`, {
-		method: 'POST',
-		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify(body)
+	const controller = new AbortController();
+	/** @type {any} */
+	let timer;
+	const timeout = new Promise((_, reject) => {
+		timer = setTimeout(() => {
+			controller.abort();
+			// An aborted request may still have reached the server and been
+			// applied -- this client only stopped waiting for the reply, it
+			// did not learn the write failed. Say so plainly rather than
+			// implying the write was rejected.
+			reject(
+				new Error(
+					`Timed out waiting for a response after ${WRITE_TIMEOUT_MS / 1000}s. ` +
+						`The write may or may not have gone through -- re-read the repository to check.`
+				)
+			);
+		}, WRITE_TIMEOUT_MS);
 	});
+
+	let res;
+	try {
+		res = await Promise.race([
+			session.fetchHandler(`/xrpc/${nsid}`, {
+				method: 'POST',
+				headers: { 'content-type': 'application/json' },
+				body: JSON.stringify(body),
+				signal: controller.signal
+			}),
+			timeout
+		]);
+	} finally {
+		clearTimeout(timer);
+	}
 
 	if (!res.ok) {
 		// surface what the server said, not a generic failure

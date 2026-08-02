@@ -107,3 +107,34 @@ describe('deleteRecord', () => {
 		});
 	});
 });
+
+describe('write timeout', () => {
+	// A hung connection or a stuck DPoP nonce retry must not leave the
+	// caller waiting forever -- procedure() bounds the wait and reports a
+	// timeout rather than hanging. Fake timers stand in for the real 30s so
+	// this test does not actually wait 30 seconds.
+	it('gives up after 30s rather than hanging forever, without claiming the write failed', async () => {
+		vi.useFakeTimers();
+		try {
+			// fetchHandler that never resolves, standing in for a connection
+			// that never gets a response.
+			const session = fakeSession(() => new Promise(() => {}));
+
+			const pending = putRecord(session, { did: 'd', col: 'c', rkey: 'k', value: {} });
+			// Attach the rejection assertion before advancing the clock so
+			// the rejection is observed rather than becoming unhandled.
+			const assertion = expect(pending).rejects.toThrow(/timed out/i);
+			await vi.advanceTimersByTimeAsync(30_000);
+			await assertion;
+
+			const err = await pending.catch((/** @type {any} */ e) => e);
+			expect(err).toBeInstanceOf(Error);
+			// The write may still have landed server-side -- this must never
+			// read as "the write failed".
+			expect(err.message).not.toMatch(/fail/i);
+			expect(err.message).toMatch(/re-read/i);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+});
