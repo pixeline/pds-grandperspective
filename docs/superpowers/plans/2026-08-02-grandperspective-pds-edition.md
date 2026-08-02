@@ -200,9 +200,18 @@ to:
 
 ```js
 import { buildTreemap } from './treemap.js';
+import { collectionHues } from '../repo/hues.js';
 ```
 
-Then delete any `describe('sessionize', ...)`, `describe('layout', ...)`, `describe('partition', ...)` and `describe('buildStack', ...)` blocks in the file.
+Then delete the `describe('sessionize', …)`, `describe('partition', …)` and `describe('buildStack', …)` blocks.
+
+**The surviving `buildTreemap` block still calls `globalLayout`** — near the top of that describe, `const g = globalLayout(records);`. That function is being deleted, so replace that one line with:
+
+```js
+	const g = collectionHues(records);
+```
+
+This is a true drop-in: the block only ever reads `g.hueOf`, and `collectionHues` returns the same `hueOf` map built by the same sorted golden-angle walk. Without this change the suite fails at Step 8 with `globalLayout is not defined`.
 
 - [ ] **Step 8: Run the whole suite**
 
