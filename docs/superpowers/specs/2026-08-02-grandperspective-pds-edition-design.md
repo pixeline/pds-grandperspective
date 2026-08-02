@@ -628,13 +628,21 @@ does not trace to a number in the repo.
 
 A single-line footer, always present, in the same neutral register as the rest:
 
-> **GrandPerspective — PDS edition.** Made by Alexandre Plennevaux.
-> Treemap concept and name after *GrandPerspective* by Erwin Bonsma.
+> Made by [@pixeline.be](https://bsky.app/profile/pixeline.be) · Treemap concept and name
+> after [*GrandPerspective*](https://grandperspectiv.sourceforge.net/) by Erwin Bonsma
 
-Linked to the original project. This is the mitigation for the borrowed-name risk in §15:
-the debt is stated in the interface, not only in a README nobody opens. The README carries
-the same credit at more length, including that GrandPerspective is GPL-licensed and that
-this is an independent work, not a port or an affiliate.
+Authorship is given as the atproto handle rather than a legal name — in a tool whose whole
+subject is atproto identity, the handle *is* the identifier, and it resolves the same way
+everything else on screen does.
+
+Both links verified: the GrandPerspective project is at `grandperspectiv.sourceforge.net`
+(no trailing `e` on the project slug — a plausible thing to get wrong and ship), copyright
+"2005-2026, Erwin Bonsma", released under the GPL.
+
+This is the mitigation for the borrowed-name risk in §16: the debt is stated in the
+interface on every screen, not only in a README nobody opens. The README carries the same
+credit at more length, including the GPL licensing of the original and that this is an
+independent work, not a port or an affiliate.
 
 ---
 
