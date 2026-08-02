@@ -1,9 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { tidToMs } from '../atproto/tid.js';
 import { audit } from '../atproto/audit.js';
-import { sessionize } from './sessionize.js';
-import { buildStack, globalLayout, partition } from './layout.js';
 import { buildTreemap } from './treemap.js';
+import { collectionHues } from '../repo/hues.js';
 
 const NOW = Date.parse('2026-07-30T00:00:00Z');
 
@@ -46,25 +45,6 @@ describe('audit', () => {
 	});
 });
 
-describe('sessionize', () => {
-	it('splits on silence longer than the threshold', () => {
-		const recs = [{ ts: 0 }, { ts: 60e3 }, { ts: 60e3 + 60 * 60e3 }];
-		const out = sessionize(recs, 30 * 60e3);
-		expect(out).toHaveLength(2);
-		expect(out[0].items).toHaveLength(2);
-		expect(out[1].silence).toBe(60 * 60e3);
-	});
-});
-
-describe('partition', () => {
-	it('gives every collection a cell that tiles the unit square', () => {
-		const cells = partition(new Map([['a', 10], ['b', 5], ['c', 1]]));
-		expect(cells.size).toBe(3);
-		const area = [...cells.values()].reduce((s, c) => s + c.w * c.h, 0);
-		expect(area).toBeCloseTo(1, 6);
-	});
-});
-
 function fixture() {
 	const day = 864e5;
 	const base = NOW - 30 * day;
@@ -82,49 +62,9 @@ function fixture() {
 	return records;
 }
 
-describe('buildStack', () => {
-	const records = fixture();
-	const g = globalLayout(records);
-	const P = { gap: 90, twist: 16, depth: 28, decay: 70, tiles: 320 };
-
-	// the bug: the stack was built with the newest session deepest, so travel
-	// ran backwards and "you are at" opened three years in the past
-	it('puts the newest session nearest the viewer as plate 1', () => {
-		const { plates } = buildStack(records, P, g);
-		const first = plates.find((p) => p.n === 1);
-		expect(first.start).toBe(records[records.length - 1].ts);
-		expect(first.z).toBe(0);
-		const oldest = plates.find((p) => p.n === plates.length);
-		expect(oldest.z).toBeLessThan(0);
-	});
-
-	it('fades the past and keeps the present at full strength', () => {
-		const { plates } = buildStack(records, P, g);
-		expect(plates.find((p) => p.n === 1).alpha).toBeCloseTo(1, 2);
-		expect(plates.find((p) => p.n === plates.length).alpha).toBeLessThan(0.3);
-	});
-
-	it('draws a tear only where a record is really invalid', () => {
-		const { plates } = buildStack(records, P, g);
-		const tears = plates.flatMap((p) => p.marks.filter((m) => m.kind === 'tear'));
-		expect(tears.length).toBe(3); // one record, three channels
-		const clean = buildStack(
-			records.map((r) => ({ ...r, errs: 0, errNames: [] })),
-			P,
-			g
-		);
-		expect(clean.plates.flatMap((p) => p.marks.filter((m) => m.kind === 'tear'))).toHaveLength(0);
-	});
-
-	it('honours the depth limit', () => {
-		const { plates } = buildStack(records, { ...P, tiles: 5 }, g);
-		expect(plates).toHaveLength(5);
-	});
-});
-
 describe('buildTreemap', () => {
 	const records = fixture();
-	const g = globalLayout(records);
+	const g = collectionHues(records);
 
 	it('lays out every collection inside the canvas', () => {
 		const { blocks } = buildTreemap(records, { w: 800, h: 600, weigh: 'records', hueOf: g.hueOf });
