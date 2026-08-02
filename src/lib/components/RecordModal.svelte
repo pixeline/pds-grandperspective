@@ -16,8 +16,31 @@
 	let editing = $state(false);
 	let confirming = $state(false);
 	let text = $state('');
+	/** @type {string|null} */
 	let problem = $state(null);
 	let busy = $state(false);
+
+	// Instance state (confirming/editing/text/problem) belongs to whichever
+	// record last touched it. Task 18 mounts this modal once and swaps the
+	// `record` prop rather than destroying the instance between records, so
+	// nothing here resets on its own. Track the record's identity in a plain
+	// (non-reactive) variable and reset per-record state whenever it changes
+	// -- including transitions to and from null, which is what makes closing
+	// the modal (by any path) also clear a stale `confirming`/`editing`.
+	// Without this, confirming a delete on record A and then opening record B
+	// lands straight on "Confirm delete" for B, and an in-progress edit of A
+	// leaves A's text sitting in the textarea under B's header.
+	/** @type {string|null} */
+	let lastKey = null;
+	$effect(() => {
+		const key = record ? `${record.col}/${record.rkey}` : null;
+		if (key === lastKey) return;
+		lastKey = key;
+		confirming = false;
+		editing = false;
+		text = '';
+		problem = null;
+	});
 
 	const writable = $derived(isOwnRepo && canWrite && !!agent && !record?.aggregate);
 
@@ -34,10 +57,10 @@
 	const readOnlyReason = $derived(
 		record?.aggregate
 			? 'This block is too small to resolve to one record.'
-			: !isOwnRepo
-				? 'You can only edit records in your own repository.'
-				: !agent
-					? 'Sign in to edit your own records.'
+			: !agent
+				? 'Sign in to edit your own records.'
+				: !isOwnRepo
+					? 'You can only edit records in your own repository.'
 					: !canWrite
 						? 'Your authorization server did not grant repository write access.'
 						: null
@@ -50,7 +73,12 @@
 	}
 
 	async function save() {
-		const check = validateEdit(record.value, text);
+		// Capture the record this write is about at the moment it starts. The
+		// write is async; `record` is a live prop that can change under us
+		// while the request is in flight (the parent can select a different
+		// cell), so every reference below must use this local, not the prop.
+		const target = record;
+		const check = validateEdit(target.value, text);
 		if (!check.ok) {
 			problem = check.reason;
 			return;
@@ -58,10 +86,10 @@
 		busy = true;
 		problem = null;
 		try {
-			await putRecord(agent, { did, col: record.col, rkey: record.rkey, value: check.value });
-			onchanged?.({ action: 'updated', record, value: check.value });
+			await putRecord(agent, { did, col: target.col, rkey: target.rkey, value: check.value });
+			onchanged?.({ action: 'updated', record: target, value: check.value });
 			editing = false;
-		} catch (e) {
+		} catch (/** @type {any} */ e) {
 			// surface the XRPC error verbatim and leave local state untouched
 			problem = String(e?.message ?? e);
 		} finally {
@@ -70,13 +98,17 @@
 	}
 
 	async function remove() {
+		// Same reasoning as save(): pin the record this delete targets before
+		// awaiting, so a mid-flight selection change can't misattribute the
+		// result to whatever happens to be selected when the response lands.
+		const target = record;
 		busy = true;
 		problem = null;
 		try {
-			await deleteRecord(agent, { did, col: record.col, rkey: record.rkey });
-			onchanged?.({ action: 'deleted', record });
+			await deleteRecord(agent, { did, col: target.col, rkey: target.rkey });
+			onchanged?.({ action: 'deleted', record: target });
 			onclose?.();
-		} catch (e) {
+		} catch (/** @type {any} */ e) {
 			problem = String(e?.message ?? e);
 			confirming = false;
 		} finally {
@@ -98,7 +130,7 @@
 	}
 </script>
 
-<svelte:window onkeydown={(e) => e.key === 'Escape' && onclose?.()} />
+<svelte:window onkeydown={(e) => e.key === 'Escape' && !busy && onclose?.()} />
 
 {#if record}
 	<div
@@ -106,14 +138,14 @@
 		role="button"
 		tabindex="-1"
 		aria-label="Close"
-		onclick={() => onclose?.()}
-		onkeydown={(e) => e.key === 'Enter' && onclose?.()}
+		onclick={() => !busy && onclose?.()}
+		onkeydown={(e) => e.key === 'Enter' && !busy && onclose?.()}
 	></div>
 
 	<div class="modal" role="dialog" aria-modal="true" aria-label="Record {record.rkey}">
 		<header>
 			<h2>{record.col}</h2>
-			<button class="x" onclick={() => onclose?.()} aria-label="Close">close</button>
+			<button class="x" onclick={() => onclose?.()} aria-label="Close" disabled={busy}>close</button>
 		</header>
 
 		<dl class="meta">
