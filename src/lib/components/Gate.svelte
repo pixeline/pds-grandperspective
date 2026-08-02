@@ -7,49 +7,15 @@
 </script>
 
 <div class="gate">
-	<h1>Stills &amp; Frames<small>ATPROTO REPO PORTRAITS</small></h1>
+	<h1>GrandPerspective<small>PDS EDITION</small></h1>
 
 	<label class="ask" for="gate-handle">Which ATProto user would you like to visit?</label>
 	<div class="field">
-		<Typeahead bind:value={handle} big autofocus onsubmit={(h) => onpick('stack', h)} />
+		<Typeahead bind:value={handle} big autofocus onsubmit={(h) => onpick(h)} />
 	</div>
 
 	<div class="cards">
-		<button class="card" onclick={() => onpick('stack')}>
-			<span class="thumb">
-				<svg viewBox="0 0 220 120" aria-hidden="true">
-					<g>
-						{#each Array(9) as _, i}
-							{@const k = 8 - i}
-							{@const s = 34 + k * 5}
-							{@const cx = 150 - k * 13}
-							{@const cy = 60 + k * 2}
-							<g transform="rotate({k * -7} {cx} {cy})" opacity={0.18 + (1 - k / 9) * 0.82}>
-								<rect
-									x={cx - s / 2}
-									y={cy - s / 2}
-									width={s}
-									height={s}
-									fill="hsl({HUES[k % HUES.length]} 62% 58%)"
-								/>
-								<rect
-									x={cx - s / 2 + s * 0.55}
-									y={cy - s / 2 + s * 0.1}
-									width={s * 0.3}
-									height={s * 0.3}
-									fill="hsl({HUES[(k + 2) % HUES.length]} 70% 50%)"
-								/>
-							</g>
-						{/each}
-					</g>
-				</svg>
-			</span>
-			<b>Stills &amp; Frames</b>
-			<span class="desc">Navigate someone's data as a 3D space-time construct.</span>
-			<i>portrait</i>
-		</button>
-
-		<button class="card" onclick={() => onpick('map')}>
+		<button class="card" onclick={() => onpick()}>
 			<span class="thumb">
 				<svg viewBox="0 0 220 120" aria-hidden="true">
 					{#each [[4, 4, 96, 68, 0], [104, 4, 62, 40, 1], [170, 4, 46, 40, 2], [104, 48, 112, 24, 3], [4, 76, 60, 40, 4], [68, 76, 48, 40, 5], [120, 76, 44, 22, 2], [168, 76, 48, 22, 1], [120, 102, 96, 14, 3]] as [x, y, w, h, hi]}
@@ -69,8 +35,8 @@
 					{/each}
 				</svg>
 			</span>
-			<b>GrandPerspective</b>
-			<span class="desc">Graphically shows the disk usage within an ATmosphere PDS.</span>
+			<b>Read repository</b>
+			<span class="desc">See where an atproto repo's bytes actually go, one cell per record.</span>
 			<i>survey</i>
 		</button>
 	</div>
