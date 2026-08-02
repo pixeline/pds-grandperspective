@@ -45,8 +45,17 @@ export function buildIndex(blocks, w, h, cellSize = DEFAULT_CELL) {
 			continue;
 		}
 		for (const c of b.cells) {
+			// treemap.js draws each cell inset (c.w/c.h = pitch - 1px) so cells look
+			// visually separated, but that leaves the 1px gap dead to the pointer.
+			// Hit test at the full pitch instead, so the grid tiles the block with
+			// no gap; clamp the last column/row so the rect never runs past the
+			// block's own bounds.
+			const ax = b.x + c.x;
+			const ay = b.y + c.y;
+			const aw = Math.min(b.pitchW, b.x + b.w - ax);
+			const ah = Math.min(b.pitchH, b.y + b.h - ay);
 			put({
-				x: b.x + c.x, y: b.y + c.y, w: c.w, h: c.h,
+				x: ax, y: ay, w: aw, h: ah,
 				hit: {
 					nsid: b.nsid, col: c.col, rkey: c.rkey, ts: c.ts,
 					bytes: c.bytes, err: c.err, aggregate: false
@@ -73,8 +82,9 @@ export function hitTest(index, x, y) {
 	const bucket = index.buckets[gy * index.cols + gx];
 	if (!bucket) return null;
 
-	// last match wins: cells are pushed after their block, so a real record
-	// beats the aggregate rectangle it sits inside
+	// a bucket can hold several candidate rectangles (it straddles more than
+	// one cell/block), so scan them all and keep the last that actually
+	// contains the point rather than trusting the first match
 	let found = null;
 	for (const r of bucket) {
 		if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) found = r.hit;

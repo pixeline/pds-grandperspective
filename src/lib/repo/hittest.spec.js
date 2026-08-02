@@ -9,6 +9,7 @@ const BLOCKS = [
 		nsid: 'a.b.left',
 		x: 0, y: 0, w: 100, h: 100,
 		aggregate: false,
+		pitchW: 50, pitchH: 50,
 		cells: [
 			{ x: 0, y: 0, w: 50, h: 50, col: 'a.b.left', rkey: 'lt', ts: 1, bytes: 5, err: '' },
 			{ x: 50, y: 0, w: 50, h: 50, col: 'a.b.left', rkey: 'rt', ts: 2, bytes: 6, err: '' },
@@ -84,5 +85,55 @@ describe('hitTest', () => {
 			}
 		}
 		expect(checked).toBeGreaterThan(0);
+	});
+
+	// treemap.js draws each cell inset (w-1 x h-1) for visual separation, but
+	// that 1px gap sits on the true tiling pitch -- a real layout, not the
+	// synthetic exactly-touching fixture above, is what proves the gap is
+	// actually hit-tested rather than dead to the pointer.
+	describe('against a real, single-collection layout (grid tiles the block exactly)', () => {
+		const records = Array.from({ length: 16 }, (_, i) => ({
+			col: 'a.b.only',
+			ts: 1000 + i,
+			rkey: `r${i}`,
+			bytes: 100,
+			errs: 0,
+			errNames: []
+		}));
+		const { hueOf } = collectionHues(records);
+		const { blocks } = buildTreemap(records, { w: 400, h: 400, weigh: 'records', hueOf });
+		const block = blocks.find((b) => b.nsid === 'a.b.only');
+		const idx = buildIndex(blocks, 400, 400);
+
+		it('has no dead interior along a horizontal sweep (hit-tested at pitch, not drawn size)', () => {
+			const y = block.y + block.pitchH / 2;
+			for (let x = block.x + 0.5; x < block.x + block.w; x += 0.5) {
+				expect(hitTest(idx, x, y)).not.toBeNull();
+			}
+		});
+
+		it('resolves a point that used to fall in the drawn-rect gap to the record whose pitch it sits in', () => {
+			// just inside the pitch boundary of column 0, past where the old
+			// (pitch - 1px) drawn cell used to end -- this used to be dead space
+			const x = block.x + block.pitchW - 0.5;
+			const y = block.y + block.pitchH / 2;
+			const hit = hitTest(idx, x, y);
+			expect(hit).not.toBeNull();
+			expect(hit.rkey).toBe('r0');
+		});
+	});
+
+	it('resolves a point exactly on the canvas far edge (x === w)', () => {
+		const hit = hitTest(index, 200, 50);
+		expect(hit).not.toBeNull();
+		expect(hit.aggregate).toBe(true);
+	});
+
+	it('gives the same answers with a non-default bucket size', () => {
+		const coarse = buildIndex(BLOCKS, 200, 100, 10);
+		expect(hitTest(coarse, 25, 25).rkey).toBe('lt');
+		expect(hitTest(coarse, 75, 75).rkey).toBe('rb');
+		expect(hitTest(coarse, 150, 50).aggregate).toBe(true);
+		expect(hitTest(coarse, 500, 500)).toBeNull();
 	});
 });

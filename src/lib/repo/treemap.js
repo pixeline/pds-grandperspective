@@ -169,7 +169,12 @@ export function buildTreemap(records, { w, h, weigh, hueOf }) {
 			bytes: recs.reduce((s, r) => s + (r.bytes || 0), 0),
 			label: L.w > 54 && L.h > 15 ? `${nsid.split('.').slice(-2).join('.')} · ${n}` : null,
 			cells: [],
-			aggregate: false
+			aggregate: false,
+			// the grid pitch cells are laid out on -- each cell draws inset from this
+			// (cw-1 x ch-1) for visual separation, but the pitch is the true tiling
+			// with no gap, and that is what hit testing needs
+			pitchW: cw,
+			pitchH: ch
 		};
 
 		if (n && cw >= 2.5 && ch >= 2.5) {
