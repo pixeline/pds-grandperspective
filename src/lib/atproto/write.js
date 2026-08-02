@@ -29,6 +29,14 @@ export function validateEdit(originalValue, text) {
 		return { ok: false, reason: 'A record must be a JSON object.' };
 	}
 
+	// Only the top-level $type is protected. At this key it is the record's
+	// identity -- changing it (in either direction, including removing it)
+	// makes the record a different kind of thing where something else
+	// expected to find it. A $type nested further in, e.g. inside an embed,
+	// is content: exactly what a raw-JSON editor exists to let someone
+	// change. Locking a nested discriminator would block legitimate edits
+	// and would need a per-lexicon schema this project deliberately does
+	// not carry, so it is intentionally left unchecked here.
 	const before = originalValue?.$type ?? null;
 	const after = parsed.$type ?? null;
 	if (before !== after) {

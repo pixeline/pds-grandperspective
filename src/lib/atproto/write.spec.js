@@ -30,6 +30,15 @@ describe('validateEdit', () => {
 		expect(out.reason).toMatch(/\$type/);
 	});
 
+	// the direction most likely to happen by accident -- a user retyping or
+	// pasting a fragment of the JSON body can drop the $type line without
+	// noticing, and it must be caught just as hard as an explicit change
+	it('rejects removing $type where the original had one', () => {
+		const out = validateEdit(original, '{"text":"changed"}');
+		expect(out.ok).toBe(false);
+		expect(out.reason).toMatch(/\$type/);
+	});
+
 	it('accepts an edit when neither side has a $type', () => {
 		expect(validateEdit({ n: 1 }, '{"n":2}').ok).toBe(true);
 	});
@@ -38,6 +47,7 @@ describe('validateEdit', () => {
 		expect(validateEdit(original, '[1,2,3]').ok).toBe(false);
 		expect(validateEdit(original, '"a string"').ok).toBe(false);
 		expect(validateEdit(original, 'null').ok).toBe(false);
+		expect(validateEdit(original, '42').ok).toBe(false);
 	});
 });
 
