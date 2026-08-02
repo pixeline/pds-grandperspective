@@ -63,6 +63,24 @@ describe('listAllRecords', () => {
 		expect(out.records.filter((r) => r.col === 'a.b.small')).toHaveLength(1);
 	});
 
+	// describeRepo can declare a collection that turns out to hold zero
+	// records. `collections` must reflect what was actually observed, matching
+	// car.js's walkRecords -- otherwise the same repo reports a different
+	// collection count depending on which reader ran.
+	it('excludes a declared collection that turns out to be empty', async () => {
+		const fetchImpl = fakePds({
+			collections: ['a.b.c', 'a.b.empty'],
+			pages: {
+				'a.b.c': { '': { records: [rec('a.b.c', '3lkwkzb3az22s', { $type: 'a.b.c' })] } },
+				'a.b.empty': { '': { records: [] } }
+			}
+		});
+
+		const out = await listAllRecords('https://pds.test', DID, { fetchImpl, now: NOW });
+
+		expect(out.collections).toEqual(['a.b.c']);
+	});
+
 	it('marks sizes as estimated, not measured', async () => {
 		const value = { $type: 'a.b.c', text: 'hello' };
 		const fetchImpl = fakePds({
@@ -74,6 +92,34 @@ describe('listAllRecords', () => {
 
 		expect(out.records[0].exact).toBe(false);
 		expect(out.records[0].bytes).toBe(JSON.stringify(value).length);
+	});
+
+	// The real-world shape this guards: `blue.linkat.board/self`,
+	// `chat.bsky.actor.declaration/self`, and 23 others on a live repo -- a
+	// singleton config record with a non-TID rkey and no createdAt. It must
+	// survive (not be dropped by a reintroduced `if (ts == null) continue`)
+	// and must sort last (not be treated as oldest by a reintroduced
+	// `a.ts - b.ts` or `?? 0`).
+	it('keeps an undated self-keyed record and sorts it last', async () => {
+		const dated = rec('a.b.c', '3lkwkzb3az22s', { $type: 'a.b.c' });
+		const undated = rec('a.b.c', 'self', { $type: 'a.b.c' }); // no createdAt, not a TID
+		const fetchImpl = fakePds({
+			collections: ['a.b.c'],
+			pages: { 'a.b.c': { '': { records: [dated, undated] } } }
+		});
+
+		const out = await listAllRecords('https://pds.test', DID, { fetchImpl, now: NOW });
+
+		// 1. survives -- catches a reintroduced `if (ts == null) continue`
+		expect(out.records).toHaveLength(2);
+
+		// 2. genuinely undated, not coerced to a real timestamp
+		const self = out.records.find((r) => r.rkey === 'self');
+		expect(self.ts).toBe(null);
+
+		// 3. sorted last -- catches a reintroduced `a.ts - b.ts` or `?? 0`,
+		// either of which would place the undated record first (NaN or epoch 0)
+		expect(out.records.at(-1).rkey).toBe('self');
 	});
 
 	it('refuses an empty repo loudly', async () => {

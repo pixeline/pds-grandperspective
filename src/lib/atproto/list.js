@@ -41,12 +41,18 @@ export async function listAllRecords(pds, did, opts = {}) {
 	const desc = await get(
 		`${pds}/xrpc/com.atproto.repo.describeRepo?repo=${encodeURIComponent(did)}`
 	);
-	const collections = (desc.collections || []).slice().sort();
-	if (!collections.length) throw new Error('Repo is empty — no collections to read.');
+	const declared = (desc.collections || []).slice().sort();
+	if (!declared.length) throw new Error('Repo is empty — no collections to read.');
 
 	const records = [];
+	// Built from records actually seen, not `declared` -- a collection describeRepo
+	// lists but that turns out to hold zero records must not be counted, or the
+	// same repo would report a different collection count depending on whether
+	// this reader or car.js's walkRecords (which counts observed collections
+	// only) produced it.
+	const collections = new Set();
 
-	for (const col of collections) {
+	for (const col of declared) {
 		let cursor = null;
 		for (let page = 0; page < MAX_PAGES_PER_COLLECTION; page++) {
 			const url =
@@ -69,6 +75,7 @@ export async function listAllRecords(pds, did, opts = {}) {
 					errNames,
 					value: r.value
 				});
+				collections.add(col);
 			}
 
 			onProgress?.(`${records.length} records · ${col.split('.').pop()}`, records.length);
@@ -81,5 +88,5 @@ export async function listAllRecords(pds, did, opts = {}) {
 	// oldest thing in the repo -- sort it last, which claims nothing about its
 	// position beyond "not placed among the dated ones".
 	records.sort((a, b) => (a.ts ?? Infinity) - (b.ts ?? Infinity));
-	return { records, collections };
+	return { records, collections: [...collections].sort() };
 }
