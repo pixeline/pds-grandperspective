@@ -38,6 +38,8 @@ Frames* stack viewer lives on the `archive/stills-and-frames` branch.
     src/lib/repo/treemap.js       nsid nesting + squarified layout
     src/lib/repo/filter.js        collection / timeframe / query filtering
     src/lib/repo/hittest.js       grid spatial index, pointer → record
+    src/lib/repo/paint.js         the one painter: layout data → a 2D context
+    src/lib/repo/exportpng.js     avatar / banner / as-shown PNG of the map
     src/lib/repo/format.js        formatters
     src/lib/repo/urlstate.js      hash round-trip
     src/lib/components/           Rail, Treemap, Firehose, RecordModal, Footer, …
@@ -48,7 +50,8 @@ Frames* stack viewer lives on the `archive/stills-and-frames` branch.
 **The seam that matters:** `treemap.js`, `filter.js`, `hittest.js` and `hues.js`
 emit plain data — no DOM, no CSS. Components render that. It is what made
 swapping the DOM renderer for canvas a leaf change, and what would make a
-later swap to WebGL the same.
+later swap to WebGL the same. It is also why PNG export is a few lines: ask
+`buildTreemap` for 3000×1000 and hand the result to the same painter.
 
 ## Findings that are load-bearing
 

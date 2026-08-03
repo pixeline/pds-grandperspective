@@ -2,12 +2,16 @@
 	import { buildTreemap } from '$lib/repo/treemap.js';
 	import { buildIndex, hitTest } from '$lib/repo/hittest.js';
 	import { fmtBytes, fmtNum } from '$lib/repo/format.js';
+	import { paintMap } from '$lib/repo/paint.js';
+	import { exportPng, TARGETS } from '$lib/repo/exportpng.js';
 
 	let {
 		records = [],
 		hueOf,
 		weigh = $bindable('bytes'),
 		exact = true,
+		/** repository this map is of; names the downloaded file */
+		label = null,
 		onhover,
 		onopen
 	} = $props();
@@ -16,6 +20,10 @@
 	let w = $state(900);
 	let h = $state(600);
 	let focusedIndex = $state(-1);
+	/** @type {string | null} */
+	let saving = $state(null);
+	/** @type {string | null} */
+	let saveError = $state(null);
 
 	// lay out at the container's real size. A floor here would compute the
 	// layout for a larger space than is actually drawn, silently clipping most
@@ -23,8 +31,10 @@
 	// exact dishonesty this project exists to avoid. A small container
 	// genuinely resolves fewer cells, and buildTreemap already says so
 	// honestly via `aggregated`; only guard the true zero/negative case.
+	/** `weigh` is a bindable string prop; buildTreemap only accepts the two. */
+	const weighing = $derived(/** @type {'bytes' | 'records'} */ (weigh));
 	const map = $derived(
-		buildTreemap(records, { w: Math.max(w, 1), h: Math.max(h, 1), weigh, hueOf })
+		buildTreemap(records, { w: Math.max(w, 1), h: Math.max(h, 1), weigh: weighing, hueOf })
 	);
 	const index = $derived(buildIndex(map.blocks, Math.max(w, 1), Math.max(h, 1)));
 	const totalBytes = $derived(records.reduce((s, r) => s + (r.bytes || 0), 0));
@@ -115,10 +125,19 @@
 		draw(canvas, map, w, h, ratio, flatCells, safeFocusedIndex);
 	});
 
-	/**
-	 * Batch by fill colour: setting fillStyle per record would be ~200k state
-	 * changes on a large repo, where grouping makes it a few thousand.
-	 */
+	// True neutral ink (--ink) and ground (--ground) are read from the cascade
+	// rather than hard-coded, since a stale literal here would quietly drift
+	// from the palette (ink used to be #161a18, the retired green-tinted ink)
+	// whenever the CSS variable changes.
+	/** @param {HTMLElement} el */
+	function palette(el) {
+		const cs = getComputedStyle(el);
+		return {
+			ink: cs.getPropertyValue('--ink').trim() || '#171717',
+			ground: cs.getPropertyValue('--ground').trim() || '#f7f7f7'
+		};
+	}
+
 	function draw(cv, m, cw, ch, ratio, cells, focusIdx) {
 		cv.width = Math.round(cw * ratio);
 		cv.height = Math.round(ch * ratio);
@@ -127,56 +146,43 @@
 
 		const ctx = cv.getContext('2d');
 		ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
-		ctx.clearRect(0, 0, cw, ch);
 
-		const byColour = new Map();
-		for (const b of m.blocks) {
-			if (b.aggregate || !b.cells.length) {
-				// treemap.js only sets block.color on aggregated blocks; an empty
-				// collection has neither cells nor a colour, and passing undefined
-				// to fillStyle silently paints the previous colour
-				if (!b.color) continue;
-				const list = byColour.get(b.color) ?? [];
-				list.push([b.x, b.y, b.w, b.h]);
-				byColour.set(b.color, list);
-				continue;
-			}
-			for (const c of b.cells) {
-				const list = byColour.get(c.color) ?? [];
-				list.push([b.x + c.x, b.y + c.y, c.w, c.h]);
-				byColour.set(c.color, list);
-			}
-		}
+		const { ink } = palette(cv);
+		// the same painter the PNG export uses -- see paint.js
+		paintMap(ctx, m, { w: cw, h: ch, ink, background: null, labels: true, labelScale: 1 });
 
-		for (const [colour, rects] of byColour) {
-			ctx.fillStyle = colour;
-			for (const [x, y, rw, rh] of rects) ctx.fillRect(x, y, rw, rh);
-		}
-
-		// True neutral ink (--ink: #171717) is the only chrome colour on
-		// screen; read it rather than hard-coding, since a stale literal here
-		// would quietly drift from the palette (this used to be #161a18, the
-		// retired green-tinted ink) whenever the CSS variable changes.
-		const ink = getComputedStyle(cv).getPropertyValue('--ink').trim() || '#171717';
-
-		// labels last, so no cell paints over them
-		ctx.font = '8.5px "IBM Plex Mono", monospace';
-		ctx.textBaseline = 'top';
-		for (const b of m.blocks) {
-			if (!b.label) continue;
-			const tw = ctx.measureText(b.label).width;
-			ctx.fillStyle = 'rgba(255,255,255,0.84)';
-			ctx.fillRect(b.x, b.y, tw + 6, 12);
-			ctx.fillStyle = ink;
-			ctx.fillText(b.label, b.x + 3, b.y + 2);
-		}
-
-		// keyboard focus outline, drawn last so it always shows on top
+		// Keyboard focus outline, drawn last so it always shows on top. It stays
+		// here rather than in the shared painter: it is view state, and an
+		// exported image must not carry it.
 		if (focusIdx >= 0 && cells[focusIdx]) {
 			const f = cells[focusIdx];
 			ctx.strokeStyle = ink;
 			ctx.lineWidth = 1;
 			ctx.strokeRect(f.x + 0.5, f.y + 0.5, Math.max(0, f.w - 1), Math.max(0, f.h - 1));
+		}
+	}
+
+	/** @param {string} kind */
+	async function savePng(kind) {
+		if (saving || !canvas) return;
+		saving = kind;
+		saveError = null;
+		try {
+			const { ink, ground } = palette(canvas);
+			await exportPng({
+				kind,
+				viewport: { w, h, ratio: window.devicePixelRatio || 1 },
+				records,
+				hueOf,
+				weigh: weighing,
+				ink,
+				background: ground,
+				label
+			});
+		} catch (/** @type {any} */ err) {
+			saveError = String(err?.message ?? err);
+		} finally {
+			saving = null;
 		}
 	}
 
@@ -256,6 +262,20 @@
 		<button class="wt" onclick={() => (weigh = weigh === 'bytes' ? 'records' : 'bytes')}>
 			sized by {weigh === 'bytes' ? 'bytes' : 'record count'}
 		</button>
+		<span class="png">
+			PNG
+			{#each Object.entries(TARGETS) as [kind, t] (kind)}
+				<button
+					class="wt"
+					disabled={!!saving || !records.length}
+					onclick={() => savePng(kind)}
+					title={kind === 'screen' ? `${Math.round(w)}×${Math.round(h)}` : `${t.w}×${t.h}`}
+				>
+					{saving === kind ? '…' : t.button}
+				</button>
+			{/each}
+		</span>
+		{#if saveError}<span class="err">{saveError}</span>{/if}
 	</div>
 </div>
 
@@ -305,8 +325,24 @@
 		color: var(--ink);
 		cursor: pointer;
 	}
-	.wt:hover {
+	.wt:hover:not(:disabled) {
 		background: var(--ink);
 		color: var(--paper);
+	}
+	.wt:disabled {
+		opacity: 0.35;
+		cursor: default;
+	}
+	.png {
+		display: flex;
+		align-items: center;
+		gap: 4px;
+		color: var(--ink-soft);
+		letter-spacing: 0.08em;
+	}
+	.err {
+		color: var(--ink);
+		border-left: 2px solid var(--ink);
+		padding-left: 6px;
 	}
 </style>

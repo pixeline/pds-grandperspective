@@ -404,6 +404,7 @@
 				hueOf={hues.hueOf}
 				bind:weigh
 				exact={data.exact}
+				label={data.handle ?? data.did}
 				onhover={onHover}
 				onopen={onOpen}
 			/>
@@ -415,8 +416,8 @@
 				<b>cannot read that repository</b>
 				<p>{error}</p>
 				<p class="fine">
-					If the handle resolves, the likely cause is CORS: a PDS must send
-					<code>Access-Control-Allow-Origin</code> on <code>/xrpc/</code> for a browser to read it.
+					If the handle resolves, likely CORS: the PDS must send
+					<code>Access-Control-Allow-Origin</code> on <code>/xrpc/</code>.
 				</p>
 			</div>
 		{/if}
