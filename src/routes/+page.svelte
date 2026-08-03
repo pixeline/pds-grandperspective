@@ -17,7 +17,7 @@
 
 	let handle = $state('');
 	let weigh = $state('bytes');
-	let filters = $state({ collections: new Set(), from: null, to: null, query: '' });
+	let filters = $state({ hidden: new Set(), from: null, to: null, query: '' });
 
 	// Critical 1 survived three review rounds partly because these were
 	// `$state(null)` with no annotation: TypeScript infers `null`, narrows
@@ -271,7 +271,7 @@
 		const s = fromHash(location.hash);
 		handle = s.handle;
 		weigh = s.weigh;
-		filters = { collections: s.collections, from: s.from, to: s.to, query: s.query };
+		filters = { hidden: s.hidden, from: s.from, to: s.to, query: s.query };
 		if (s.handle) draw();
 	});
 </script>

@@ -59,12 +59,12 @@ function haystackOf(r) {
 
 /**
  * @param {Array<any>} records
- * @param {{collections: Set<string>, from: number|null, to: number|null, query: string}} f
+ * @param {{hidden: Set<string>, from: number|null, to: number|null, query: string}} f
  */
 export function applyFilters(records, f) {
-	const { collections, from, to, query } = f;
+	const { hidden, from, to, query } = f;
 	const q = (query ?? '').trim().toLowerCase();
-	const byCol = collections && collections.size > 0;
+	const hasHidden = hidden && hidden.size > 0;
 
 	const out = [];
 	let bytes = 0;
@@ -73,7 +73,7 @@ export function applyFilters(records, f) {
 	for (const r of records) {
 		totalBytes += r.bytes || 0;
 
-		if (byCol && ![...collections].some((sel) => underNamespace(r.col, sel))) continue;
+		if (hasHidden && [...hidden].some((sel) => underNamespace(r.col, sel))) continue;
 
 		// An undated record -- no decodable TID, no createdAt -- cannot be shown
 		// to fall inside a requested range, so any bound excludes it. Testing

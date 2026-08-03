@@ -5,7 +5,7 @@
 
 	let {
 		handle = $bindable(''),
-		filters = $bindable({ collections: new Set(), from: null, to: null, query: '' }),
+		filters = $bindable({ hidden: new Set(), from: null, to: null, query: '' }),
 		busy = false,
 		status = 'idle',
 		stats = null,
@@ -29,10 +29,10 @@
 	}
 
 	function toggleCollection(nsid) {
-		const next = new Set(filters.collections);
+		const next = new Set(filters.hidden);
 		if (next.has(nsid)) next.delete(nsid);
 		else next.add(nsid);
-		filters = { ...filters, collections: next };
+		filters = { ...filters, hidden: next };
 	}
 </script>
 
@@ -97,12 +97,12 @@
 				<input type="date" value={isoDay(filters.to)} onchange={(e) => setDate('to', e.currentTarget.value)} />
 			</label>
 		</div>
-		{#if filters.collections.size}
+		{#if filters.hidden.size}
 			<button
 				class="ghost sm"
-				onclick={() => (filters = { ...filters, collections: new Set() })}
+				onclick={() => (filters = { ...filters, hidden: new Set() })}
 			>
-				clear {filters.collections.size} collection filter{filters.collections.size > 1 ? 's' : ''}
+				clear {filters.hidden.size} collection filter{filters.hidden.size > 1 ? 's' : ''}
 			</button>
 		{/if}
 	</div>
@@ -153,7 +153,7 @@
 				{#each legend as [col, n] (col)}
 					<button
 						class="leg"
-						class:on={filters.collections.has(col)}
+						class:on={filters.hidden.has(col)}
 						onclick={() => toggleCollection(col)}
 						title="{col} — click to filter"
 					>

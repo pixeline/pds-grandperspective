@@ -10,7 +10,7 @@ const RECORDS = [
 	{ col: 'my.custom.rel', rkey: 'ddd', ts: T('2026-06-01'), bytes: 40, value: { nested: { deep: 'needle' } } }
 ];
 
-const none = { collections: new Set(), from: null, to: null, query: '' };
+const none = { hidden: new Set(), from: null, to: null, query: '' };
 
 describe('applyFilters', () => {
 	it('passes everything through when nothing is set', () => {
@@ -21,21 +21,49 @@ describe('applyFilters', () => {
 		expect(out.totalBytes).toBe(100);
 	});
 
-	it('matches an exact collection', () => {
-		const out = applyFilters(RECORDS, { ...none, collections: new Set(['my.custom.rel']) });
-		expect(out.records.map((r) => r.rkey)).toEqual(['ddd']);
+	it('hides an exact collection', () => {
+		const out = applyFilters(RECORDS, { ...none, hidden: new Set(['my.custom.rel']) });
+		expect(out.records.map((r) => r.rkey).sort()).toEqual(['aaa', 'bbb', 'ccc']);
+	});
+
+	// hiding one collection should remove exactly its records and leave the
+	// rest untouched
+	it('hiding one collection removes exactly its records and leaves the rest', () => {
+		const out = applyFilters(RECORDS, { ...none, hidden: new Set(['app.bsky.feed.like']) });
+		expect(out.records.map((r) => r.rkey).sort()).toEqual(['aaa', 'ccc', 'ddd']);
+		expect(out.matched).toBe(3);
 	});
 
 	// the trap: prefix matching must respect dot boundaries, or app.bsky
 	// silently swallows app.bskyfoo
-	it('matches a namespace prefix only on dot boundaries', () => {
-		const out = applyFilters(RECORDS, { ...none, collections: new Set(['app.bsky']) });
-		expect(out.records.map((r) => r.rkey).sort()).toEqual(['aaa', 'bbb']);
-		expect(out.records.some((r) => r.col === 'app.bskyfoo.thing')).toBe(false);
+	it('hides a namespace prefix only on dot boundaries', () => {
+		const out = applyFilters(RECORDS, { ...none, hidden: new Set(['app.bsky']) });
+		expect(out.records.map((r) => r.rkey).sort()).toEqual(['ccc', 'ddd']);
+		expect(out.records.some((r) => r.col === 'app.bsky.feed.post')).toBe(false);
+		expect(out.records.some((r) => r.col === 'app.bsky.feed.like')).toBe(false);
+		// app.bskyfoo must survive -- it is NOT under the app.bsky namespace
+		expect(out.records.some((r) => r.col === 'app.bskyfoo.thing')).toBe(true);
 	});
 
-	it('treats an empty collection set as no filter, not as match-nothing', () => {
-		expect(applyFilters(RECORDS, { ...none, collections: new Set() }).matched).toBe(4);
+	it('hiding a namespace prefix removes the whole branch', () => {
+		const out = applyFilters(RECORDS, { ...none, hidden: new Set(['app.bsky']) });
+		expect(out.matched).toBe(2);
+		expect(out.records.map((r) => r.col)).not.toContain('app.bsky.feed.post');
+		expect(out.records.map((r) => r.col)).not.toContain('app.bsky.feed.like');
+	});
+
+	it('treats an empty hidden set as no filter, not as hide-everything', () => {
+		expect(applyFilters(RECORDS, { ...none, hidden: new Set() }).matched).toBe(4);
+	});
+
+	it('hiding every collection yields an empty result without throwing', () => {
+		const all = new Set(RECORDS.map((r) => r.col));
+		const out = applyFilters(RECORDS, { ...none, hidden: all });
+		expect(out.records).toEqual([]);
+		expect(out.matched).toBe(0);
+		expect(out.total).toBe(4);
+		expect(out.bytes).toBe(0);
+		expect(out.totalBytes).toBe(100);
 	});
 
 	it('bounds by timeframe inclusively at both edges', () => {
@@ -64,7 +92,7 @@ describe('applyFilters', () => {
 
 	it('ANDs every filter together', () => {
 		const out = applyFilters(RECORDS, {
-			collections: new Set(['app.bsky']),
+			hidden: new Set(['my.custom.rel']),
 			from: T('2025-05-01'),
 			to: null,
 			query: 'at://'
@@ -73,10 +101,10 @@ describe('applyFilters', () => {
 	});
 
 	it('reports filtered and total byte weight separately', () => {
-		const out = applyFilters(RECORDS, { ...none, collections: new Set(['my.custom.rel']) });
-		expect(out.bytes).toBe(40);
+		const out = applyFilters(RECORDS, { ...none, hidden: new Set(['app.bsky']) });
+		expect(out.bytes).toBe(70);
 		expect(out.totalBytes).toBe(100);
-		expect(out.matched).toBe(1);
+		expect(out.matched).toBe(2);
 		expect(out.total).toBe(4);
 	});
 

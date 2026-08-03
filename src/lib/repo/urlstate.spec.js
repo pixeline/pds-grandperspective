@@ -10,7 +10,7 @@ describe('urlstate', () => {
 		const state = {
 			handle: 'pixeline.be',
 			weigh: 'records',
-			collections: new Set(['app.bsky', 'my.custom.rel']),
+			hidden: new Set(['app.bsky', 'my.custom.rel']),
 			from: Date.parse('2025-01-01T00:00:00Z'),
 			to: Date.parse('2026-01-01T00:00:00Z'),
 			query: 'needle'
@@ -18,10 +18,16 @@ describe('urlstate', () => {
 		const back = fromHash(toHash(state));
 		expect(back.handle).toBe('pixeline.be');
 		expect(back.weigh).toBe('records');
-		expect([...back.collections].sort()).toEqual(['app.bsky', 'my.custom.rel']);
+		expect([...back.hidden].sort()).toEqual(['app.bsky', 'my.custom.rel']);
 		expect(back.from).toBe(state.from);
 		expect(back.to).toBe(state.to);
 		expect(back.query).toBe('needle');
+	});
+
+	it('round-trips the hidden set through the hash key `hide`', () => {
+		const h = toHash({ ...defaultState(), hidden: new Set(['app.bsky.feed.like']) });
+		expect(h).toContain('hide=app.bsky.feed.like');
+		expect([...fromHash(h).hidden]).toEqual(['app.bsky.feed.like']);
 	});
 
 	it('drops the retired stack keys instead of restoring them', () => {
@@ -30,6 +36,16 @@ describe('urlstate', () => {
 		expect(back).not.toHaveProperty('gap');
 		expect(back).not.toHaveProperty('cap');
 		expect(back).not.toHaveProperty('v');
+	});
+
+	// `c` was the retired include-filter key. Reinterpreting it as the new
+	// exclude-filter would silently show whoever opens an old shared link a
+	// different repo view than the one that was shared -- it must be ignored,
+	// not converted.
+	it('ignores the retired `c` include-filter key rather than reinterpreting it', () => {
+		const back = fromHash('#h=a.test&c=app.bsky.feed.like');
+		expect(back.handle).toBe('a.test');
+		expect(back.hidden).toEqual(new Set());
 	});
 
 	it('survives a malformed hash rather than throwing', () => {

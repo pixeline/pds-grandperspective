@@ -10,7 +10,7 @@ export function defaultState() {
 	return {
 		handle: '',
 		weigh: 'bytes',
-		collections: new Set(),
+		hidden: new Set(),
 		from: null,
 		to: null,
 		query: ''
@@ -24,7 +24,7 @@ export function toHash(s) {
 	const q = new URLSearchParams();
 	if (s.handle) q.set('h', s.handle);
 	if (s.weigh && s.weigh !== 'bytes') q.set('weigh', s.weigh);
-	if (s.collections?.size) q.set('c', [...s.collections].sort().join(','));
+	if (s.hidden?.size) q.set('hide', [...s.hidden].sort().join(','));
 	if (s.from != null) q.set('from', isoDay(s.from));
 	if (s.to != null) q.set('to', isoDay(s.to));
 	if (s.query?.trim()) q.set('q', s.query.trim());
@@ -39,8 +39,12 @@ export function fromHash(hash) {
 	s.handle = q.get('h') || '';
 	if (q.get('weigh') === 'records') s.weigh = 'records';
 
-	const cols = q.get('c');
-	if (cols) s.collections = new Set(cols.split(',').filter(Boolean));
+	// `c` was the retired include-filter key. An old URL carrying it is
+	// ignored, not reinterpreted -- silently flipping a former include-filter
+	// into an exclude-filter would show someone a different repo view than
+	// the link they shared.
+	const hide = q.get('hide');
+	if (hide) s.hidden = new Set(hide.split(',').filter(Boolean));
 
 	for (const k of /** @type {const} */ (['from', 'to'])) {
 		const raw = q.get(k);
