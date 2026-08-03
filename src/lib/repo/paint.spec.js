@@ -140,3 +140,76 @@ describe('paintMap', () => {
 		expect(lastCellColour).toBeLessThan(firstText);
 	});
 });
+
+describe('paintMap labelInset', () => {
+	// Vertical canvas (200 wide, 800 tall) with two equal-weight collections
+	// produces blocks stacked top-to-bottom: block 1 at (x=6, y=6, w=188, h=388)
+	// and block 2 at (x=6, y=406, w=188, h=388). With labelInset.top=50 the
+	// top block's label is skipped, the bottom block's label survives. The
+	// squarified layout always pads by 6px on the left/top, so no block is
+	// ever drawn at exactly (0, 0) -- the test assertions are written in
+	// terms of `b.y` >= `labelInset.top` rather than absolute 0.
+	it('skips labels whose block starts above the inset (mobile: under the railtoggle)', () => {
+		const map = mapOf({ 'a.b.c': 4, 'd.e.f': 4 }, 200, 800);
+		const ctx = stubCtx();
+		paintMap(ctx, map, {
+			w: 200,
+			h: 800,
+			labels: true,
+			labelInset: { top: 50, left: 0 }
+		});
+
+		const labelCalls = ctx.ops.filter(([op]) => op === 'fillText');
+		const cellCalls = ctx.ops.filter(([op]) => op === 'fillRect');
+
+		// cells were still drawn -- label inset doesn't shrink the map
+		expect(cellCalls.length).toBeGreaterThan(0);
+		// at least one label survived (the bottom block), not all of them
+		expect(labelCalls.length).toBeGreaterThan(0);
+		// and fewer than the number of fillStyle (cell) batches -- proving the
+		// top block's label was skipped
+		expect(labelCalls.length).toBeLessThan(ctx.ops.filter(([op]) => op === 'fillStyle').length);
+	});
+
+	it('every drawn label has b.y >= labelInset.top', () => {
+		const map = mapOf({ 'a.b.c': 4, 'd.e.f': 4 }, 200, 800);
+		const ctx = stubCtx();
+		paintMap(ctx, map, {
+			w: 200,
+			h: 800,
+			labels: true,
+			labelInset: { top: 50, left: 0 }
+		});
+
+		// For each fillText, the immediately preceding fillRect is its plate
+		// (the painter does plate-then-text in two consecutive ops). Walk
+		// backwards to find it and assert plate.y >= 50.
+		const ops = ctx.ops;
+		let labelCount = 0;
+		for (let i = 0; i < ops.length; i++) {
+			if (ops[i][0] !== 'fillText') continue;
+			labelCount++;
+			const plateIdx = ops
+				.slice(0, i)
+				.reverse()
+				.findIndex(([op]) => op === 'fillRect');
+			const plate = ops.slice(0, i).reverse()[plateIdx];
+			// fillRect args are (x, y, w, h) packed after the op name:
+			// plate[1]=x, plate[2]=y, plate[3]=w, plate[4]=h. We want y.
+			expect(plate[2]).toBeGreaterThanOrEqual(50);
+		}
+		// sanity: at least one label was drawn and the loop actually ran
+		expect(labelCount).toBeGreaterThan(0);
+	});
+
+	it('defaults to labelInset {top: 0, left: 0} when omitted (every label drawn)', () => {
+		const map = mapOf({ 'a.b.c': 4, 'd.e.f': 4 }, 200, 800);
+		const ctx = stubCtx();
+		paintMap(ctx, map, { w: 200, h: 800, labels: true });
+
+		// both blocks have b.y >= 0, so both labels are drawn -- 2 fillTexts
+		// total for this fixture.
+		const labelCalls = ctx.ops.filter(([op]) => op === 'fillText');
+		expect(labelCalls.length).toBe(2);
+	});
+});

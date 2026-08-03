@@ -24,11 +24,12 @@ const LABEL_PLATE = 'rgba(255,255,255,0.84)';
  * @param {string|null} [o.background]  fill first (export), or null to clear (screen)
  * @param {boolean} [o.labels]      draw collection labels
  * @param {number} [o.labelScale]   multiply label type and its plate
+ * @param {{top:number,left:number}} [o.labelInset]  skip labels under a top/left overlay
  */
 export function paintMap(
 	ctx,
 	map,
-	{ w, h, ink = '#171717', background = null, labels = true, labelScale = 1 }
+	{ w, h, ink = '#171717', background = null, labels = true, labelScale = 1, labelInset = { top: 0, left: 0 } }
 ) {
 	if (background) {
 		ctx.fillStyle = background;
@@ -67,10 +68,16 @@ export function paintMap(
 
 	// labels last, so no cell paints over them
 	const s = labelScale;
+	const insetTop = labelInset?.top ?? 0;
+	const insetLeft = labelInset?.left ?? 0;
 	ctx.font = `${LABEL_FONT_PX * s}px "IBM Plex Mono", monospace`;
 	ctx.textBaseline = 'top';
 	for (const b of map.blocks) {
 		if (!b.label) continue;
+		// mobile: omit labels for blocks under the railtoggle so the button
+		// doesn't sit on top of them. The cell is still drawn -- tap still
+		// works, the label is just less readable than the button over it.
+		if (b.y < insetTop || b.x < insetLeft) continue;
 		const tw = ctx.measureText(b.label).width;
 		ctx.fillStyle = LABEL_PLATE;
 		ctx.fillRect(b.x, b.y, tw + 2 * LABEL_PAD_PX * s, LABEL_BOX_PX * s);
