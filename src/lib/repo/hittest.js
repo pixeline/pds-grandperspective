@@ -38,7 +38,10 @@ export function buildIndex(blocks, w, h, cellSize = DEFAULT_CELL) {
 			put({
 				x: b.x, y: b.y, w: b.w, h: b.h,
 				hit: {
-					nsid: b.nsid, col: b.nsid, rkey: b.rkey ?? null,
+					// treemap.js no longer puts a rkey on an aggregate block --
+					// it never identified the whole block, only one arbitrary
+					// member of it -- so this is always null, never a guess.
+					nsid: b.nsid, col: b.nsid, rkey: null,
 					records: b.records, bytes: b.bytes, aggregate: true
 				}
 			});

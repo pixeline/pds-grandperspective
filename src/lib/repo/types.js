@@ -40,8 +40,10 @@
  * @property {string} nsid
  * @property {string} col same as `nsid`, kept for a uniform `col ?? nsid`
  *   read at call sites
- * @property {string|null} rkey the last record's rkey, label-only -- do not
- *   treat this as identifying a real record
+ * @property {null} rkey always null -- an aggregate has no single record
+ *   behind it, so there is nothing honest to put here. (This used to be an
+ *   arbitrary member record's rkey, dressed up as if it identified the whole
+ *   block; that was the bug, not a feature to preserve.)
  * @property {number} records
  * @property {number} bytes
  * @property {true} aggregate

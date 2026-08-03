@@ -181,4 +181,21 @@ describe('buildTreemap', () => {
 		expect(block.cells.length).toBe(0);
 		expect(aggregated).toBeGreaterThan(0);
 	});
+
+	// Regression: an aggregate block used to carry `rkey: recs[recs.length -
+	// 1].rkey` -- an arbitrary member of the block, dressed up in the modal as
+	// if it identified the whole thing while a neighbouring sentence said no
+	// single record was being shown. There is no honest rkey for a block, so
+	// it must not exist at all -- not `undefined` read as "just didn't set
+	// it yet", an absent property a consumer cannot mistake for real data.
+	it('puts no rkey at all on an aggregate block', () => {
+		const records = Array.from({ length: 500 }, (_, i) => ({
+			col: 'a.b.c', ts: i + 1, rkey: `r-${i}`, bytes: 100, errs: 0, errNames: []
+		}));
+		const { hueOf } = collectionHues(records);
+		const { blocks } = buildTreemap(records, { w: 30, h: 30, weigh: 'bytes', hueOf });
+		const block = blocks.find((b) => b.nsid === 'a.b.c');
+		expect(block.aggregate).toBe(true);
+		expect('rkey' in block).toBe(false);
+	});
 });

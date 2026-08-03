@@ -252,9 +252,14 @@ export function buildTreemap(records, { w, h, weigh, hueOf }) {
 				cells++;
 			});
 		} else if (n) {
-			// too small to resolve one record per cell: say so, do not fake it
+			// too small to resolve one record per cell: say so, do not fake it.
+			// Deliberately no `block.rkey` here -- an aggregate has no single
+			// record behind it, and `recs[recs.length - 1].rkey` (the old
+			// behaviour) was an arbitrary member of the block dressed up as if
+			// it identified the whole thing. hittest.js and Treemap.svelte's
+			// buildFlatCells both hard-code their AggregateHit.rkey to `null`
+			// now; there is nothing left for either to read here.
 			block.aggregate = true;
-			block.rkey = recs[recs.length - 1].rkey;
 			block.color = `hsl(${hue} 58% 52%)`;
 			aggregated++;
 		}

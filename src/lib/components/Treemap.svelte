@@ -63,7 +63,10 @@
 					hit: {
 						nsid: b.nsid,
 						col: b.nsid,
-						rkey: b.rkey ?? null,
+						// treemap.js no longer puts a rkey on an aggregate block
+						// -- it never identified the whole block, only one
+						// arbitrary member of it -- so this is always null.
+						rkey: null,
 						records: b.records,
 						bytes: b.bytes,
 						aggregate: true

@@ -103,6 +103,9 @@
 
 	const writable = $derived(isOwnRepo && canWrite && !!agent && !record?.aggregate);
 
+	// An aggregate's `rkey` is always null (see types.js), so this is null for
+	// an aggregate too -- no tid time is shown for a block with no single
+	// record behind it.
 	const tidTime = $derived(record?.rkey ? tidToMs(record.rkey) : null);
 	// `value` only exists on the non-aggregate half of ModalRecord --
 	// `record?.value` doesn't narrow that away, so check `aggregate` first
@@ -116,9 +119,13 @@
 		tidTime != null && claimed != null && Math.abs(tidTime - claimed) > 864e5
 	);
 
+	// An aggregate already gets its "too small to resolve" explanation from the
+	// `.note` paragraph in the template below -- saying it again here would be
+	// the exact contradiction this fix is for (two statements where one would
+	// do), so an aggregate contributes nothing to the read-only footer text.
 	const readOnlyReason = $derived(
 		record?.aggregate
-			? 'This block is too small to resolve to one record.'
+			? null
 			: !agent
 				? 'Sign in to edit your own records.'
 				: !isOwnRepo
@@ -223,9 +230,19 @@
 		}
 	}
 
+	// pdsls.dev renders `at://did/collection` as a collection listing (its own
+	// breadcrumb treats the collection as a level), and `at://did/collection/
+	// rkey` as one record. An aggregate has no single record to point at --
+	// building the record-shaped URL for it would land on whichever rkey
+	// happened to be last in the block, exactly the bug this fixes -- so it
+	// gets the collection-scoped URL instead, and the button says so.
+	const pdslsUrl = $derived(
+		record ? `https://pdsls.dev/at://${did}/${record.col}${record.aggregate ? '' : `/${record.rkey}`}` : null
+	);
+
 	function pdsls() {
-		if (!record) return;
-		const url = `https://pdsls.dev/at://${did}/${record.col}/${record.rkey}`;
+		if (!record || !pdslsUrl) return;
+		const url = pdslsUrl;
 		// a synthetic link, not window.open: a features string makes it a popup,
 		// which blockers kill silently
 		const a = document.createElement('a');
@@ -242,19 +259,16 @@
 	// otherwise) -- or, when the record's value carries a `subject.uri` (a
 	// like or repost pointing at the post it's about), the link is resolved
 	// from THAT subject instead, so the button opens what the record is
-	// about rather than a home page. An aggregate block has no single record
-	// behind it, so it always links to the domain root -- pass `null` rather
-	// than the label-only `rkey` an AggregateHit carries, and no `value` to
-	// check for a subject.
+	// about rather than a home page.
+	//
+	// An aggregate block has no single record behind it, so this button is
+	// dropped entirely rather than shown pointing at a domain root -- for a
+	// collection like app.bsky.feed.like that would be "Open on bsky.app"
+	// landing on a home feed, which is not what "open on the app" promises
+	// for a whole collection. `null` here (not "compute it anyway with no
+	// rkey/value") is what makes the button vanish below.
 	const appLink = $derived(
-		record
-			? appLinkFor(
-					record.col,
-					did,
-					record.aggregate ? null : record.rkey,
-					record.aggregate ? null : record.value
-				)
-			: null
+		record && !record.aggregate ? appLinkFor(record.col, did, record.rkey, record.value) : null
 	);
 
 	/** @param {string} domain */
@@ -327,7 +341,12 @@
 		onkeydown={(e) => e.key === 'Enter' && !busy && onclose?.()}
 	></div>
 
-	<div class="modal" role="dialog" aria-modal="true" aria-label="Record {record.rkey}">
+	<div
+		class="modal"
+		role="dialog"
+		aria-modal="true"
+		aria-label={record.aggregate ? `Collection ${record.col}` : `Record ${record.rkey}`}
+	>
 		<header>
 			<h2>{record.col}</h2>
 			<button class="x" onclick={() => onclose?.()} aria-label="Close" disabled={busy}>close</button>
@@ -343,8 +362,17 @@
 				<dt>repo</dt>
 				<dd title={did}>{handle ?? did ?? '—'}{#if isOwnRepo} <b class="you">(you)</b>{/if}</dd>
 			</div>
-			<div><dt>rkey</dt><dd>{record.rkey ?? '—'}</dd></div>
-			<div><dt>stored</dt><dd>{fmtBytes(record.bytes ?? 0)}</dd></div>
+			<!-- An aggregate has no single record behind it -- no rkey, no tid
+			     time, no per-record stored size to name. Showing those next to a
+			     sentence saying "no single record is being shown" is exactly the
+			     self-contradiction this fixes, so they are omitted outright
+			     rather than filled with a placeholder. The collection is already
+			     named in the header above; count and total bytes are stated once,
+			     in the `.note` paragraph below -- not duplicated here. -->
+			{#if !record.aggregate}
+				<div><dt>rkey</dt><dd>{record.rkey ?? '—'}</dd></div>
+				<div><dt>stored</dt><dd>{fmtBytes(record.bytes ?? 0)}</dd></div>
+			{/if}
 			{#if tidTime != null}
 				<div><dt>tid time</dt><dd>{fmtDate(tidTime)}</dd></div>
 			{/if}
@@ -361,8 +389,8 @@
 
 		{#if record.aggregate}
 			<p class="note">
-				{record.records} records, {fmtBytes(record.bytes)}. This block is drawn whole because its
-				cells would be smaller than a pixel — no single record is being shown.
+				{record.records} records, {fmtBytes(record.bytes)} total. This block is drawn whole
+				because its cells would be smaller than a pixel — no single record is being shown.
 			</p>
 		{:else if editing}
 			<textarea bind:value={text} spellcheck="false" aria-label="Record JSON"></textarea>
@@ -375,7 +403,9 @@
 		{/if}
 
 		<footer>
-			<button class="ghost" onclick={pdsls}>Open on pdsls.dev</button>
+			<button class="ghost" onclick={pdsls}>
+				{record.aggregate ? 'Open collection on pdsls.dev' : 'Open on pdsls.dev'}
+			</button>
 
 			{#if appLink}
 				<button class="ghost app-link" onclick={openApp}>
