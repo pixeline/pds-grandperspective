@@ -71,11 +71,15 @@ export default defineConfig({
 		})
 	],
 	server: {
+		// Default to literal loopback for OAuth, but allow LAN binding for
+		// read-only testing on phones/tablets via `VITE_DEV_HOST=0.0.0.0`.
+		// CLI `--host` also overrides this.
+		host: process.env.VITE_DEV_HOST ||
 		// the OAuth loopback client requires the literal IP; the spec rejects
 		// the hostname `localhost` as a redirect target. The port is left to
 		// .claude/launch.json, which already pins 5199 -- any port works, the
 		// host is the part that matters.
-		host: '127.0.0.1'
+			'127.0.0.1'
 	},
 	test: {
 		expect: { requireAssertions: true },
