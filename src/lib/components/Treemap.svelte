@@ -122,7 +122,10 @@
 		// redraw on mount on every HiDPI display once the real ratio replaces
 		// the initial guess of 1
 		const ratio = window.devicePixelRatio || 1;
-		draw(canvas, map, w, h, ratio, flatCells, safeFocusedIndex);
+		const isMobile = w <= 820;
+		const labelScale = isMobile ? 1.3 : 1;
+		const labelInset = isMobile ? { top: 56, left: 0 } : { top: 0, left: 0 };
+		draw(canvas, map, w, h, ratio, flatCells, safeFocusedIndex, labelScale, labelInset);
 	});
 
 	// True neutral ink (--ink) and ground (--ground) are read from the cascade
@@ -138,7 +141,7 @@
 		};
 	}
 
-	function draw(cv, m, cw, ch, ratio, cells, focusIdx) {
+	function draw(cv, m, cw, ch, ratio, cells, focusIdx, labelScale = 1, labelInset = { top: 0, left: 0 }) {
 		cv.width = Math.round(cw * ratio);
 		cv.height = Math.round(ch * ratio);
 		cv.style.width = `${cw}px`;
@@ -149,7 +152,7 @@
 
 		const { ink } = palette(cv);
 		// the same painter the PNG export uses -- see paint.js
-		paintMap(ctx, m, { w: cw, h: ch, ink, background: null, labels: true, labelScale: 1 });
+		paintMap(ctx, m, { w: cw, h: ch, ink, background: null, labels: true, labelScale, labelInset });
 
 		// Keyboard focus outline, drawn last so it always shows on top. It stays
 		// here rather than in the shared painter: it is view state, and an

@@ -114,7 +114,7 @@ export function renderTarget({ records, hueOf, weigh, target, ink, background })
 	// Exports are opaque. On screen the page background shows through any
 	// sub-pixel seam between rects; a transparent PNG would leak whatever it is
 	// placed on into those seams instead.
-	paintMap(ctx, map, { w, h, ink, background, labels, labelScale });
+	paintMap(ctx, map, { w, h, ink, background, labels, labelScale, labelInset: { top: 0, left: 0 } });
 	return cv;
 }
 
