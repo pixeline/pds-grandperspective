@@ -1,5 +1,3 @@
-import { BrowserOAuthClient } from '@atproto/oauth-client-browser';
-
 /**
  * The client_id IS the URL the metadata is served from. Moving the app
  * invalidates every existing OAuth session, which is why the deployment path
@@ -23,6 +21,27 @@ export const CLIENT_ID =
  * token generation. `create` is absent because the app never creates records.
  */
 export const SCOPE = 'atproto repo:*?action=update&action=delete';
+
+/**
+ * OAuth writes need a secure context in the browser. Plain HTTP on a LAN IP
+ * is enough for read-only repo browsing, but not for WebCrypto-backed OAuth.
+ * Loopback remains allowed for local desktop development.
+ *
+ * @param {{hostname?: string|null, isSecureContext?: boolean|null}} [env]
+ */
+export function oauthSupported(env = {}) {
+	const hostname = env.hostname ?? '';
+	const secure = !!env.isSecureContext;
+	const isLoopback =
+		hostname === '127.0.0.1' ||
+		hostname === 'localhost' ||
+		hostname === '[::1]' ||
+		hostname === '::1';
+	return secure || isLoopback;
+}
+
+export const OAUTH_UNAVAILABLE_REASON =
+	'Sign in is unavailable on plain HTTP over LAN. Use the loopback URL on this Mac, or HTTPS.';
 
 /**
  * Did the authorization server actually grant repo writes?
@@ -90,7 +109,19 @@ export function createSessionStore() {
 
 		async init() {
 			error = null;
+			if (
+				typeof location !== 'undefined' &&
+				!oauthSupported({
+					hostname: location.hostname,
+					isSecureContext: globalThis.isSecureContext
+				})
+			) {
+				client = null;
+				canWrite = false;
+				return;
+			}
 			try {
+				const { BrowserOAuthClient } = await import('@atproto/oauth-client-browser');
 				client = await BrowserOAuthClient.load({
 					clientId: clientId(),
 					handleResolver: 'https://public.api.bsky.app'
@@ -125,6 +156,16 @@ export function createSessionStore() {
 		// both silent.
 		async signIn(input) {
 			error = null;
+			if (
+				typeof location !== 'undefined' &&
+				!oauthSupported({
+					hostname: location.hostname,
+					isSecureContext: globalThis.isSecureContext
+				})
+			) {
+				error = OAUTH_UNAVAILABLE_REASON;
+				return;
+			}
 			const cleaned = String(input ?? '').trim().replace(/^@/, '');
 			if (!cleaned) {
 				error = 'Enter a handle or DID to sign in with.';
