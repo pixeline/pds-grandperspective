@@ -19,6 +19,16 @@
 const LABEL_RE = /^[a-z0-9-]+$/;
 
 /**
+ * Hosts this tool refuses to drive traffic to. The first entry,
+ * `standard.site`, is a placeholder page whose redirect is lossy enough
+ * that "Open on standard.site" is not what the user asked for. Add
+ * future entries here with the same justification. Empty entries
+ * (someone trying to remove a block) MUST be cleared by deletion, not
+ * by leaving an empty string -- `Set.has('')` matches every host.
+ */
+export const BLOCKED_DOMAINS = new Set(['standard.site']);
+
+/**
  * Encode a path segment for a bsky.app URL, but restore literal colons
  * afterward.
  *
@@ -163,7 +173,7 @@ export function appLinkFor(nsid, did, rkey, value) {
 	const subjectRef = parseAtUri(subjectUriOf(value));
 	if (subjectRef) {
 		const subjectDomain = appDomainOf(subjectRef.collection);
-		if (subjectDomain) {
+		if (subjectDomain && !BLOCKED_DOMAINS.has(subjectDomain)) {
 			const deepLink = BLUESKY_DEEP_LINKS[subjectRef.collection]?.(
 				subjectRef.did,
 				subjectRef.rkey
@@ -172,12 +182,13 @@ export function appLinkFor(nsid, did, rkey, value) {
 				? { domain: subjectDomain, url: deepLink, deep: true, subject: true }
 				: { domain: subjectDomain, url: `https://${subjectDomain}/`, deep: false, subject: true };
 		}
-		// subject parsed cleanly but its own collection doesn't resolve to a
-		// domain -- fall through to this record's own link below.
+		// subject resolved to a domain we don't link to, or has no domain --
+		// fall through to this record's own link below.
 	}
 
 	const domain = appDomainOf(nsid);
 	if (!domain) return null;
+	if (BLOCKED_DOMAINS.has(domain)) return null;
 	const root = `https://${domain}/`;
 	const deepLink = nsid != null && did != null ? BLUESKY_DEEP_LINKS[nsid]?.(did, rkey) : null;
 	return deepLink ? { domain, url: deepLink, deep: true } : { domain, url: root, deep: false };

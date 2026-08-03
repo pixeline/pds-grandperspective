@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { appDomainOf, appLinkFor } from './appOf.js';
+import { appDomainOf, appLinkFor, BLOCKED_DOMAINS } from './appOf.js';
 
 describe('appDomainOf', () => {
 	// real NSIDs from the measured 196-collection repository, not invented ones
@@ -199,5 +199,51 @@ describe('appLinkFor with a subject (like/repost pointing at another record)', (
 			url: 'https://bsky.app/',
 			deep: false
 		});
+	});
+});
+
+describe('BLOCKED_DOMAINS', () => {
+	it('contains standard.site as the only entry', () => {
+		expect([...BLOCKED_DOMAINS]).toEqual(['standard.site']);
+	});
+});
+
+describe('appLinkFor with blocked domains', () => {
+	const did = 'did:plc:abc123';
+	const rkey = '3l7xyz';
+
+	it('returns null when the record\'s own collection resolves to a blocked domain', () => {
+		expect(appLinkFor('site.standard.foo', did, rkey)).toBeNull();
+		expect(appLinkFor('site.standard.foo', did, rkey, {})).toBeNull();
+	});
+
+	it('returns null even when there is a deep-link path available (no route to a blocked host)', () => {
+		// a Bluesky-shaped collection resolves to bsky.app, not standard.site,
+		// so this proves the policy is "domain-in-set" not "nsid looks like x"
+		expect(appLinkFor('app.bsky.actor.profile', did, rkey)).not.toBeNull();
+	});
+
+	it('falls back to a normal own-link when the subject is blocked but the record itself is not', () => {
+		const value = {
+			subject: { uri: `at://did:plc:other/site.standard.thing/abc` }
+		};
+		expect(appLinkFor('app.bsky.feed.like', did, rkey, value)).toEqual({
+			domain: 'bsky.app',
+			url: 'https://bsky.app/',
+			deep: false
+		});
+	});
+
+	it('returns null when BOTH subject and own domain are blocked', () => {
+		const value = {
+			subject: { uri: `at://did:plc:other/site.standard.bar/abc` }
+		};
+		expect(appLinkFor('site.standard.foo', did, rkey, value)).toBeNull();
+	});
+
+	it('does not throw when the subject is blocked and the value carries junk', () => {
+		expect(() =>
+			appLinkFor('site.standard.foo', did, rkey, { subject: { uri: 'not-a-url' } })
+		).not.toThrow();
 	});
 });
