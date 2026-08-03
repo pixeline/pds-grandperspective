@@ -19,6 +19,30 @@
 const LABEL_RE = /^[a-z0-9-]+$/;
 
 /**
+ * Encode a path segment for a bsky.app URL, but restore literal colons
+ * afterward.
+ *
+ * A colon is a legal `pchar` under RFC 3986 -- it does not need escaping in a
+ * path segment -- and every atproto tool renders DIDs with plain colons
+ * (`did:plc:...`, `did:web:...`). `encodeURIComponent` escapes it anyway
+ * (`%3A`), which bsky.app tolerates but nothing else is guaranteed to, and it
+ * is simply ugly.
+ *
+ * This does NOT skip encoding altogether: a `did:web` may legitimately carry
+ * a percent-encoded port (`did:web:example.com%3A3000`), and an rkey is
+ * attacker-influenced data that must stay escaped for any character that
+ * actually needs it. Encoding first and then unescaping only the colon is the
+ * narrow fix -- everything else `encodeURIComponent` would escape stays
+ * escaped.
+ *
+ * @param {string} segment
+ * @returns {string}
+ */
+function encodePathSegment(segment) {
+	return encodeURIComponent(segment).replace(/%3A/g, ':');
+}
+
+/**
  * First two dot-segments of an NSID, reversed and lowercased, e.g.
  * `app.bsky.feed.post` -> `bsky.app`. `null` for anything that isn't a
  * plausible NSID prefix -- fewer than 3 segments (a valid NSID always has at
@@ -51,19 +75,19 @@ export function appDomainOf(nsid) {
  * @type {Record<string, (did: string, rkey: string|null|undefined) => string|null>}
  */
 const BLUESKY_DEEP_LINKS = {
-	'app.bsky.actor.profile': (did) => `https://bsky.app/profile/${encodeURIComponent(did)}`,
+	'app.bsky.actor.profile': (did) => `https://bsky.app/profile/${encodePathSegment(did)}`,
 	'app.bsky.feed.post': (did, rkey) =>
 		rkey == null
 			? null
-			: `https://bsky.app/profile/${encodeURIComponent(did)}/post/${encodeURIComponent(rkey)}`,
+			: `https://bsky.app/profile/${encodePathSegment(did)}/post/${encodePathSegment(rkey)}`,
 	'app.bsky.feed.generator': (did, rkey) =>
 		rkey == null
 			? null
-			: `https://bsky.app/profile/${encodeURIComponent(did)}/feed/${encodeURIComponent(rkey)}`,
+			: `https://bsky.app/profile/${encodePathSegment(did)}/feed/${encodePathSegment(rkey)}`,
 	'app.bsky.graph.list': (did, rkey) =>
 		rkey == null
 			? null
-			: `https://bsky.app/profile/${encodeURIComponent(did)}/lists/${encodeURIComponent(rkey)}`
+			: `https://bsky.app/profile/${encodePathSegment(did)}/lists/${encodePathSegment(rkey)}`
 };
 
 /**

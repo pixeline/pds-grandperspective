@@ -37,35 +37,64 @@ describe('appLinkFor', () => {
 	const did = 'did:plc:abc123';
 	const rkey = '3l7xyz';
 
-	it('produces the four documented Bluesky deep links, with did/rkey encoded', () => {
+	// `did` here is `did:plc:abc123` -- a colon is a legal path character
+	// (RFC 3986 `pchar`) and every atproto tool renders DIDs unescaped, so the
+	// expected URLs below keep the colons plain rather than routing them
+	// through a bare `encodeURIComponent(did)`, which would over-escape them
+	// to `%3A` (ugly, and not what other clients expect).
+	it('produces the four documented Bluesky deep links, with did colons left plain and rkey encoded', () => {
 		expect(appLinkFor('app.bsky.actor.profile', did, rkey)).toEqual({
 			domain: 'bsky.app',
-			url: `https://bsky.app/profile/${encodeURIComponent(did)}`,
+			url: `https://bsky.app/profile/${did}`,
 			deep: true
 		});
 		expect(appLinkFor('app.bsky.feed.post', did, rkey)).toEqual({
 			domain: 'bsky.app',
-			url: `https://bsky.app/profile/${encodeURIComponent(did)}/post/${encodeURIComponent(rkey)}`,
+			url: `https://bsky.app/profile/${did}/post/${rkey}`,
 			deep: true
 		});
 		expect(appLinkFor('app.bsky.feed.generator', did, rkey)).toEqual({
 			domain: 'bsky.app',
-			url: `https://bsky.app/profile/${encodeURIComponent(did)}/feed/${encodeURIComponent(rkey)}`,
+			url: `https://bsky.app/profile/${did}/feed/${rkey}`,
 			deep: true
 		});
 		expect(appLinkFor('app.bsky.graph.list', did, rkey)).toEqual({
 			domain: 'bsky.app',
-			url: `https://bsky.app/profile/${encodeURIComponent(did)}/lists/${encodeURIComponent(rkey)}`,
+			url: `https://bsky.app/profile/${did}/lists/${rkey}`,
 			deep: true
 		});
 	});
 
-	it('encodes did/rkey values that need it', () => {
+	it('renders a did:plc: DID with plain, unescaped colons', () => {
+		const link = appLinkFor('app.bsky.actor.profile', 'did:plc:weedlv2mczjipzyjs324e6r5', null);
+		expect(link.url).toBe('https://bsky.app/profile/did:plc:weedlv2mczjipzyjs324e6r5');
+	});
+
+	it('still escapes rkey characters that need it, even though did colons are left plain', () => {
+		const link = appLinkFor('app.bsky.feed.post', 'did:plc:abc', 'a/b c');
+		// the did's colons are plain; the rkey (attacker-influenced data) is
+		// still fully escaped -- '/' and ' ' both need it
+		expect(link.url).toBe('https://bsky.app/profile/did:plc:abc/post/a%2Fb%20c');
+	});
+
+	it('does not corrupt a did:web whose port is already percent-encoded', () => {
+		// did:web may legitimately carry a percent-encoded port. The literal
+		// colons after `did` and `web` become plain ':'; the pre-existing
+		// '%3A' is data, not one of THIS encoding step's colons, so its '%'
+		// still gets escaped to '%25' like any other literal percent sign --
+		// it must not be "unescaped" into a raw colon by the colon-restoring
+		// step, which would change what the DID actually says.
+		const weirdDid = 'did:web:example.com%3A3000';
+		const link = appLinkFor('app.bsky.actor.profile', weirdDid, null);
+		expect(link.url).toBe('https://bsky.app/profile/did:web:example.com%253A3000');
+	});
+
+	it('encodes did/rkey values that need it, leaving only colons plain', () => {
 		const weirdDid = 'did:web:example.com:alice bob';
 		const weirdRkey = 'a/b c';
 		const link = appLinkFor('app.bsky.feed.post', weirdDid, weirdRkey);
 		expect(link.url).toBe(
-			`https://bsky.app/profile/${encodeURIComponent(weirdDid)}/post/${encodeURIComponent(weirdRkey)}`
+			'https://bsky.app/profile/did:web:example.com:alice%20bob/post/a%2Fb%20c'
 		);
 	});
 
@@ -113,7 +142,7 @@ describe('appLinkFor with a subject (like/repost pointing at another record)', (
 	it("resolves a like's link from its subject post, using the subject's did/rkey rather than the like's own", () => {
 		expect(appLinkFor('app.bsky.feed.like', did, rkey, likeValue)).toEqual({
 			domain: 'bsky.app',
-			url: `https://bsky.app/profile/${encodeURIComponent(subjectDid)}/post/${encodeURIComponent(subjectRkey)}`,
+			url: `https://bsky.app/profile/${subjectDid}/post/${subjectRkey}`,
 			deep: true,
 			subject: true
 		});
@@ -126,7 +155,7 @@ describe('appLinkFor with a subject (like/repost pointing at another record)', (
 		};
 		expect(appLinkFor('app.bsky.feed.repost', did, rkey, repostValue)).toEqual({
 			domain: 'bsky.app',
-			url: `https://bsky.app/profile/${encodeURIComponent(subjectDid)}/post/${encodeURIComponent(subjectRkey)}`,
+			url: `https://bsky.app/profile/${subjectDid}/post/${subjectRkey}`,
 			deep: true,
 			subject: true
 		});
@@ -162,7 +191,7 @@ describe('appLinkFor with a subject (like/repost pointing at another record)', (
 	it('is unchanged from current behaviour for a record with no subject at all (value omitted)', () => {
 		expect(appLinkFor('app.bsky.feed.post', did, rkey)).toEqual({
 			domain: 'bsky.app',
-			url: `https://bsky.app/profile/${encodeURIComponent(did)}/post/${encodeURIComponent(rkey)}`,
+			url: `https://bsky.app/profile/${did}/post/${rkey}`,
 			deep: true
 		});
 		expect(appLinkFor('app.bsky.feed.like', did, rkey)).toEqual({
