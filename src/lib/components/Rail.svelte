@@ -2,7 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import Typeahead from './Typeahead.svelte';
 	import Footer from './Footer.svelte';
-	import { fmtBytes, fmtNum } from '$lib/repo/format.js';
+	import { fmtBytes, fmtNum, fmtPct } from '$lib/repo/format.js';
 
 	let {
 		handle = $bindable(''),
@@ -12,6 +12,14 @@
 		stats = null,
 		legend = [],
 		errors = [],
+		// The collection auto-hidden at the end of the last read, and its share
+		// of that read's bytes -- or null. Passed from +page.svelte, which owns
+		// the one-shot decision; Rail only has to say it out loud, unmissably,
+		// next to the control that undoes it. This project exists because a
+		// previous version silently showed a partial picture -- hiding a
+		// collection by default is only honest if this cannot be missed, so it
+		// is a standing line of text here, not a tooltip or a dimmed label.
+		autoHidden = null,
 		hueOf,
 		session = null,
 		ondraw,
@@ -228,6 +236,15 @@
 				<button class="ghost sm" onclick={showAll}>Show all</button>
 			{/if}
 		</div>
+		{#if autoHidden}
+			<!-- Unmissable, on purpose: naming the collection and its exact share
+			     right next to "Show all" is what makes hiding 89% of a repo by
+			     default an honest default rather than the silent partial picture
+			     this project exists to replace. -->
+			<p class="note warn autohide">
+				<b>{autoHidden.col}</b> — {fmtPct(autoHidden.share)} of bytes — hidden automatically
+			</p>
+		{/if}
 		<div class="legend">
 			{#if legend.length}
 				{#each legend as [col, n] (col)}

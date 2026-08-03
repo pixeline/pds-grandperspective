@@ -24,3 +24,8 @@ export function fmtDur(ms) {
 export function fmtDate(ms) {
 	return new Date(ms).toISOString().replace('T', ' ').slice(0, 16);
 }
+
+/** @param {number} share a 0..1 fraction */
+export function fmtPct(share) {
+	return `${Math.round(share * 100)}%`;
+}

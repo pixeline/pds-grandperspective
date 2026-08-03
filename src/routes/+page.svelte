@@ -11,6 +11,7 @@
 	import { collectionHues } from '$lib/repo/hues.js';
 	import { applyFilters } from '$lib/repo/filter.js';
 	import { resolveHit } from '$lib/repo/resolveHit.js';
+	import { selectDominantCollection } from '$lib/repo/dominance.js';
 	import { defaultState, fromHash, toHash } from '$lib/repo/urlstate.js';
 
 	const session = createSessionStore();
@@ -41,6 +42,21 @@
 	// Keys (`col/rkey`) of records edited in this session, kept separate from
 	// `data.exact`/`data.source` -- see the stats derivation below for why.
 	let editedKeys = $state(new Set());
+
+	// The collection auto-hidden at the end of the read that produced `data`
+	// (see draw()), and its share of that read's total bytes -- or null if
+	// nothing was dominant enough, or the read suppressed auto-hide because an
+	// explicit `hide=` was already in the URL. This is set once, at read
+	// completion (a one-shot action), never watched and re-applied afterward.
+	// `autoHiddenNotice` below is what actually decides whether Rail shows
+	// anything: if the user clicks "Show all" (or otherwise removes this
+	// collection from filters.hidden), the notice must disappear along with
+	// it, without this code re-adding the collection or re-triggering.
+	/** @type {{col: string, share: number} | null} */
+	let autoHidden = $state(null);
+	const autoHiddenNotice = $derived(
+		autoHidden && filters.hidden.has(autoHidden.col) ? autoHidden : null
+	);
 
 	// firehose state
 	let phase = $state('resolving');
@@ -126,7 +142,17 @@
 		history.replaceState(null, '', toHash({ ...defaultState(), handle, weigh, ...filters }));
 	});
 
-	async function draw(who = null) {
+	/**
+	 * @param {string|null} [who]
+	 * @param {{suppressAutoHide?: boolean}} [opts] `suppressAutoHide`: true
+	 *   only when THIS read was launched from a URL hash that already named an
+	 *   explicit `hide=` -- a shared link must reproduce exactly what the
+	 *   sharer saw, so auto-hide must not add a collection the link didn't ask
+	 *   for. Every other caller (Rail's Read button, Gate's pick, the
+	 *   post-sign-in redirect with no `#h=`) leaves this false, so a fresh read
+	 *   still gets the one-shot dominant-collection check.
+	 */
+	async function draw(who = null, { suppressAutoHide = false } = {}) {
 		// take the handle explicitly: a two-way binding may not have propagated
 		// by the time a select callback fires
 		if (who) handle = who;
@@ -142,6 +168,7 @@
 		hover = null;
 		selected = null;
 		editedKeys = new Set();
+		autoHidden = null;
 		gotBytes = 0;
 		gotRecords = 0;
 		lines = [];
@@ -172,6 +199,24 @@
 			hues = collectionHues(d.records);
 			data = d;
 			gotRecords = d.records.length;
+
+			// One-shot: decide once, right here at read completion, never as a
+			// standing rule that re-fires later. Nothing after this point
+			// watches `filters` and re-adds the collection -- clicking "Show
+			// all" or toggling it back on is final until the next read.
+			if (!suppressAutoHide) {
+				const dominant = selectDominantCollection(d.records);
+				if (dominant) {
+					const totalBytes = d.records.reduce((s, r) => s + (r.bytes || 0), 0);
+					const colBytes = d.records.reduce(
+						(s, r) => (r.col === dominant ? s + (r.bytes || 0) : s),
+						0
+					);
+					autoHidden = { col: dominant, share: totalBytes ? colBytes / totalBytes : 0 };
+					filters = { ...filters, hidden: new Set([...filters.hidden, dominant]) };
+				}
+			}
+
 			// The firehose showed real records; end on the true final lines --
 			// but d.records is ts-sorted with undated records (no TID, no
 			// createdAt) pushed last (car.js), so a plain slice(-24) shows the
@@ -283,11 +328,19 @@
 		handle = s.handle;
 		weigh = s.weigh;
 		filters = { hidden: s.hidden, from: s.from, to: s.to, query: s.query };
+		// A `hide=` already present in the URL that opened this page names
+		// exactly what the sharer chose to hide -- auto-hide must not add a
+		// collection on top of that, or a shared link would show its recipient
+		// something the sharer never saw. This is checked ONLY for the read
+		// `onMount` itself triggers below; every later read (Rail's Read
+		// button, Gate's pick) has no URL of its own to honour, so it gets a
+		// fresh one-shot auto-hide check regardless of this flag.
+		const suppressAutoHide = s.hidden.size > 0;
 		if (s.handle) {
 			// An explicit #h= always wins, even when signed in: a shared link to
 			// someone else's repo must not be hijacked into the signed-in user's
 			// own.
-			draw();
+			draw(null, { suppressAutoHide });
 		} else if (session.did) {
 			// Landing back here straight from the OAuth callback (no explicit
 			// handle in the URL): session.init() just established a real
@@ -300,7 +353,7 @@
 			// state appear immediately rather than a blank entry screen
 			// appearing to hang through what can be a large read (~56 MB for
 			// the account this was reported against).
-			draw(session.handle ?? session.did);
+			draw(session.handle ?? session.did, { suppressAutoHide });
 		}
 	});
 </script>
@@ -323,6 +376,7 @@
 			{stats}
 			{legend}
 			{errors}
+			autoHidden={autoHiddenNotice}
 			hueOf={hues?.hueOf}
 			{session}
 			ondraw={draw}
