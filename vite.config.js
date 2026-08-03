@@ -37,11 +37,23 @@ export default defineConfig({
 	// logger.js's four literal reads appear there. If a future @atproto/*
 	// upgrade starts calling them, this narrow define will stop working and the
 	// failure will be loud (a real ReferenceError), which is the point.
+	//
+	// The value is '""' and NOT 'undefined'. Vitest copies every
+	// `process.env.*` define into the real `process.env` of the test process
+	// (deleteDefineConfig, vitest/dist/chunks/cli-api), where assignment
+	// coerces to a string -- so 'undefined' arrived as the truthy STRING
+	// "undefined". logger.js line 8 is `dest ? destination(dest) : undefined`,
+	// so pino opened a log file literally named `undefined` in the repo root on
+	// every test run (traced through sonic-boom to fs.open(undefined); the
+	// file was committed by accident once already). An empty string is falsy in
+	// all four of logger.js's reads -- `?? '0'`, `dest ?`, `|| 'info'`,
+	// `?.trim() ?` -- so behaviour in the browser bundle is identical to
+	// undefined, and Node no longer gets a truthy filename.
 	define: {
-		'process.env.LOG_ENABLED': 'undefined',
-		'process.env.LOG_DESTINATION': 'undefined',
-		'process.env.LOG_LEVEL': 'undefined',
-		'process.env.LOG_SYSTEMS': 'undefined'
+		'process.env.LOG_ENABLED': '""',
+		'process.env.LOG_DESTINATION': '""',
+		'process.env.LOG_LEVEL': '""',
+		'process.env.LOG_SYSTEMS': '""'
 	},
 	plugins: [
 		sveltekit({
