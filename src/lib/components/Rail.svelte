@@ -2,6 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import Typeahead from './Typeahead.svelte';
 	import Footer from './Footer.svelte';
+	import Preferences from './Preferences.svelte';
 	import { fmtBytes, fmtNum, fmtPct } from '$lib/repo/format.js';
 
 	let {
@@ -302,6 +303,9 @@
 	</div>
 
 	<hr />
+	{#if session?.did}
+		<Preferences session={session} />
+	{/if}
 	<Footer />
 </aside>
 
