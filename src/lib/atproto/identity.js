@@ -28,16 +28,23 @@ async function fetchDidDoc(did, opts) {
 /**
  * @param {string} input handle, @handle or did
  * @param {{signal?: AbortSignal, fetchImpl?: typeof fetch}} [opts]
- * @returns {Promise<{did: string, pds: string}>}
+ * @returns {Promise<{did: string, pds: string, handle: string|null}>}
  */
 export async function resolveIdentity(input, opts = {}) {
-	let did = input.trim().replace(/^@/, '');
+	const cleaned = input.trim().replace(/^@/, '');
+	let did = cleaned;
+	// A handle is what the caller typed, kept only when there actually was one
+	// to resolve from -- a bare DID input has no handle to show, and inventing
+	// one (e.g. from a later profile lookup) is exactly the kind of "looks
+	// authoritative, isn't" bug this function exists to avoid.
+	let handle = null;
 	if (!did.startsWith('did:')) {
 		const j = await jget(
 			`https://public.api.bsky.app/xrpc/com.atproto.identity.resolveHandle?handle=${encodeURIComponent(did)}`,
 			opts
 		);
 		did = j.did;
+		handle = cleaned;
 	}
 	const doc = await fetchDidDoc(did, opts);
 	const svc = (doc.service || []).find((/** @type {any} */ s) =>
@@ -49,5 +56,5 @@ export async function resolveIdentity(input, opts = {}) {
 	// the DID document is untrusted third-party input; only https is acceptable
 	if (!pds.startsWith('https://')) throw new Error(`PDS endpoint is not https: ${pds}`);
 
-	return { did, pds };
+	return { did, pds, handle };
 }

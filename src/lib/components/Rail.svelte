@@ -172,6 +172,24 @@
 			<tbody>
 				<tr><td class="k">status</td><td class="v">{status}</td></tr>
 				{#if stats}
+					<!-- Stated from the read result (stats.did/stats.handle), never
+					     from the handle input field above -- that field says what to
+					     read next, not what is on screen, and the two can silently
+					     disagree the moment it is edited without pressing Read. -->
+					<tr>
+						<td class="k">identity</td>
+						<td class="v idval" title={stats.handle ? null : stats.did}>
+							{stats.handle ?? stats.did}{#if stats.isOwn}
+								<b class="you">(you)</b>
+							{/if}
+						</td>
+					</tr>
+					{#if stats.handle}
+						<tr>
+							<td class="k">did</td>
+							<td class="v idval" title={stats.did}>{stats.did}</td>
+						</tr>
+					{/if}
 					<tr><td class="k">pds</td><td class="v">{stats.pds}</td></tr>
 					<tr><td class="k">collections</td><td class="v">{stats.collections}</td></tr>
 					<tr><td class="k">records</td><td class="v">{fmtNum(stats.records)}</td></tr>
@@ -327,6 +345,11 @@
 	td { padding: 2px 0; vertical-align: top; }
 	td.k { color: var(--ink-soft); }
 	td.v { text-align: right; font-weight: 500; }
+	/* A DID is long and must stay selectable/copyable -- it's the unambiguous
+	   identifier when there's no handle. Left-align and let it wrap rather
+	   than truncating text a user might need to copy in full. */
+	td.v.idval { text-align: left; overflow-wrap: anywhere; user-select: text; }
+	.you { font-weight: 700; }
 	.legend-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
 	.legend-head .ghost.sm { padding: 3px 6px; }
 	.legend, .errs { display: flex; flex-direction: column; gap: 3px; }

@@ -96,3 +96,79 @@ describe('appLinkFor', () => {
 		expect(appLinkFor(null, did, rkey)).toBeNull();
 	});
 });
+
+describe('appLinkFor with a subject (like/repost pointing at another record)', () => {
+	const did = 'did:plc:abc123';
+	const rkey = '3l7xyz';
+	const subjectDid = 'did:plc:mhzudjib7boip3hqda3vaxyr';
+	const subjectRkey = '3kneztyw2xd2o';
+	const likeValue = {
+		$type: 'app.bsky.feed.like',
+		subject: {
+			cid: 'bafyreicu3n3b',
+			uri: `at://${subjectDid}/app.bsky.feed.post/${subjectRkey}`
+		}
+	};
+
+	it("resolves a like's link from its subject post, using the subject's did/rkey rather than the like's own", () => {
+		expect(appLinkFor('app.bsky.feed.like', did, rkey, likeValue)).toEqual({
+			domain: 'bsky.app',
+			url: `https://bsky.app/profile/${encodeURIComponent(subjectDid)}/post/${encodeURIComponent(subjectRkey)}`,
+			deep: true,
+			subject: true
+		});
+	});
+
+	it('resolves a repost the same way', () => {
+		const repostValue = {
+			$type: 'app.bsky.feed.repost',
+			subject: { cid: 'bafyreicu3n3b', uri: `at://${subjectDid}/app.bsky.feed.post/${subjectRkey}` }
+		};
+		expect(appLinkFor('app.bsky.feed.repost', did, rkey, repostValue)).toEqual({
+			domain: 'bsky.app',
+			url: `https://bsky.app/profile/${encodeURIComponent(subjectDid)}/post/${encodeURIComponent(subjectRkey)}`,
+			deep: true,
+			subject: true
+		});
+	});
+
+	it("falls back to the subject's own domain root when the subject's collection has no known route", () => {
+		const value = {
+			subject: { cid: 'bafyreicu3n3b', uri: `at://${subjectDid}/sh.tangled.repo/abc123` }
+		};
+		expect(appLinkFor('app.bsky.feed.like', did, rkey, value)).toEqual({
+			domain: 'tangled.sh',
+			url: 'https://tangled.sh/',
+			deep: false,
+			subject: true
+		});
+	});
+
+	it.each([
+		['no subject property at all', {}],
+		['a null subject', { subject: null }],
+		['subject as a plain (non-uri) string', { subject: 'not a uri' }],
+		['an at:// uri missing segments', { subject: { uri: 'at://did:plc:abc' } }],
+		['a non-at:// url', { subject: { uri: 'https://example.com/post/1' } }]
+	])('falls back to the record\'s own link, without throwing, for a malformed subject (%s)', (_label, value) => {
+		expect(() => appLinkFor('app.bsky.feed.like', did, rkey, value)).not.toThrow();
+		expect(appLinkFor('app.bsky.feed.like', did, rkey, value)).toEqual({
+			domain: 'bsky.app',
+			url: 'https://bsky.app/',
+			deep: false
+		});
+	});
+
+	it('is unchanged from current behaviour for a record with no subject at all (value omitted)', () => {
+		expect(appLinkFor('app.bsky.feed.post', did, rkey)).toEqual({
+			domain: 'bsky.app',
+			url: `https://bsky.app/profile/${encodeURIComponent(did)}/post/${encodeURIComponent(rkey)}`,
+			deep: true
+		});
+		expect(appLinkFor('app.bsky.feed.like', did, rkey)).toEqual({
+			domain: 'bsky.app',
+			url: 'https://bsky.app/',
+			deep: false
+		});
+	});
+});

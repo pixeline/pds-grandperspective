@@ -79,6 +79,15 @@
 		if (!data || !filtered) return null;
 		const invalid = data.records.reduce((s, r) => s + (r.errs ? 1 : 0), 0);
 		return {
+			// The viewed identity, stated from the READ result -- never from
+			// the handle input field. The field is a control ("what to read
+			// next"); reusing its live value here is the exact bug this
+			// fixes: edit it without pressing Read and the rail would
+			// silently claim you're looking at whatever is now typed, not
+			// what was actually read.
+			did: data.did,
+			handle: data.handle,
+			isOwn: isOwnRepo,
 			pds: new URL(data.pds).host,
 			collections: data.collections.length,
 			records: data.records.length,
@@ -343,6 +352,7 @@
 <RecordModal
 	record={selected}
 	did={data?.did ?? null}
+	handle={data?.handle ?? null}
 	agent={session.agent}
 	canWrite={session.canWrite}
 	{isOwnRepo}

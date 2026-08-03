@@ -12,11 +12,12 @@
 	import { SvelteSet } from 'svelte/reactivity';
 
 	/** @type {{record: import('$lib/repo/types.js').ModalRecord | null, did: string | null,
-	 *          agent: any, canWrite: boolean, isOwnRepo: boolean,
+	 *          handle: string | null, agent: any, canWrite: boolean, isOwnRepo: boolean,
 	 *          onclose?: () => void, onchanged?: (e: {action: 'updated'|'deleted', record: any, value?: any}) => void}} */
 	let {
 		record = null,
 		did = null,
+		handle = null,
 		agent = null,
 		canWrite = false,
 		isOwnRepo = false,
@@ -238,11 +239,22 @@
 
 	// The app that owns this record's lexicon, and the best URL to open on it
 	// (deep link for the four documented Bluesky shapes, domain root
-	// otherwise). An aggregate block has no single record behind it, so it
-	// always links to the domain root -- pass `null` rather than the label-only
-	// `rkey` an AggregateHit carries.
+	// otherwise) -- or, when the record's value carries a `subject.uri` (a
+	// like or repost pointing at the post it's about), the link is resolved
+	// from THAT subject instead, so the button opens what the record is
+	// about rather than a home page. An aggregate block has no single record
+	// behind it, so it always links to the domain root -- pass `null` rather
+	// than the label-only `rkey` an AggregateHit carries, and no `value` to
+	// check for a subject.
 	const appLink = $derived(
-		record ? appLinkFor(record.col, did, record.aggregate ? null : record.rkey) : null
+		record
+			? appLinkFor(
+					record.col,
+					did,
+					record.aggregate ? null : record.rkey,
+					record.aggregate ? null : record.value
+				)
+			: null
 	);
 
 	/** @param {string} domain */
@@ -322,6 +334,15 @@
 		</header>
 
 		<dl class="meta">
+			<!-- This is where the owner's confusion actually happened: a record
+			     from someone else's repository, with nothing on screen saying
+			     so. Name the repository here, from `did`/`handle` props that
+			     come from the read result, not from whatever happens to be
+			     typed in the handle field. -->
+			<div>
+				<dt>repo</dt>
+				<dd title={did}>{handle ?? did ?? '—'}{#if isOwnRepo} <b class="you">(you)</b>{/if}</dd>
+			</div>
 			<div><dt>rkey</dt><dd>{record.rkey ?? '—'}</dd></div>
 			<div><dt>stored</dt><dd>{fmtBytes(record.bytes ?? 0)}</dd></div>
 			{#if tidTime != null}
@@ -361,7 +382,12 @@
 					{#if iconSrc}
 						<img class="app-icon" src={iconSrc} alt="" aria-hidden="true" onerror={iconError} />
 					{/if}
-					Open on {appLink.domain}
+					<!-- appLink.subject: this button opens what the record POINTS AT
+					     (e.g. the liked post), not the record itself -- pdsls.dev
+					     above stays the "show me this exact record" affordance.
+					     Say so, rather than just naming the domain, which reads as
+					     "open the record" and surprises when it isn't. -->
+					{appLink.subject ? `Open linked record on ${appLink.domain}` : `Open on ${appLink.domain}`}
 				</button>
 			{/if}
 
@@ -426,6 +452,7 @@
 	.meta > div { display: flex; gap: 8px; }
 	dt { color: var(--ink-soft); }
 	dd { margin: 0; }
+	.you { font-weight: 700; }
 	.skew dd { font-weight: 500; }
 	pre, textarea {
 		margin: 0;

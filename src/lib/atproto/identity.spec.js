@@ -20,7 +20,7 @@ describe('resolveIdentity', () => {
 	it('resolves a normal https endpoint, stripping a trailing slash', async () => {
 		const fetchImpl = fetchImplFor('https://pds.test/');
 		const out = await resolveIdentity('alice.test', { fetchImpl });
-		expect(out).toEqual({ did: DID, pds: 'https://pds.test' });
+		expect(out).toEqual({ did: DID, pds: 'https://pds.test', handle: 'alice.test' });
 	});
 
 	it('rejects an http endpoint', async () => {
@@ -78,5 +78,17 @@ describe('resolveIdentity', () => {
 		const urls = fetchImpl.mock.calls.map((c) => String(c[0]));
 		expect(urls.some((u) => u.includes('resolveHandle'))).toBe(false);
 		expect(urls.some((u) => u.includes('plc.directory'))).toBe(true);
+	});
+
+	it('returns a null handle for a DID input -- there is nothing resolved to show', async () => {
+		const fetchImpl = fetchImplFor('https://pds.test');
+		const out = await resolveIdentity(DID, { fetchImpl });
+		expect(out).toEqual({ did: DID, pds: 'https://pds.test', handle: null });
+	});
+
+	it('strips a leading @ and surrounding whitespace before treating input as the handle', async () => {
+		const fetchImpl = fetchImplFor('https://pds.test');
+		const out = await resolveIdentity('  @alice.test  ', { fetchImpl });
+		expect(out.handle).toBe('alice.test');
 	});
 });

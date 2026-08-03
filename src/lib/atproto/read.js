@@ -28,7 +28,7 @@ export const DEFAULT_LIMIT_BYTES = 150 * 1024 * 1024;
  *          onProgress?: (e: {phase: string, bytes?: number, records?: number, message: string}) => void,
  *          onSizeGate?: (bytes: number) => Promise<boolean>,
  *          limitBytes?: number, now?: number, fetchImpl?: typeof fetch}} [opts]
- * @returns {Promise<{did: string, pds: string, rev: string|null,
+ * @returns {Promise<{did: string, handle: string|null, pds: string, rev: string|null,
  *          records: import('../repo/types.js').RepoRecord[], collections: string[],
  *          exact: boolean, errorTally: Map<string, number>, source: 'car'|'list'}>}
  */
@@ -45,7 +45,7 @@ export async function readRepo(input, opts = {}) {
 	const say = (phase, message, extra = {}) => onProgress?.({ phase, message, ...extra });
 
 	say('resolving', 'Resolving identity…');
-	const { did, pds } = await resolveIdentity(input, { signal, fetchImpl });
+	const { did, pds, handle } = await resolveIdentity(input, { signal, fetchImpl });
 
 	let out = null;
 	let source = 'car';
@@ -90,6 +90,9 @@ export async function readRepo(input, opts = {}) {
 
 	return {
 		did: out.did ?? did,
+		// resolved only from the input handle/DID, never from CAR/listRecords
+		// output -- those readers have no notion of a handle at all
+		handle,
 		pds,
 		rev: out.rev ?? null,
 		records: out.records,

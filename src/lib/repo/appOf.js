@@ -67,18 +67,91 @@ const BLUESKY_DEEP_LINKS = {
 };
 
 /**
+ * Parse an `at://did/collection/rkey` URI into its three parts. Never
+ * throws: a record's `value` is untrusted data, so this must be safe against
+ * anything -- not a string, no `at://` prefix, missing segments, empty
+ * segments. Returns `null` for anything that isn't a clean three-segment
+ * reference.
+ *
+ * @param {unknown} uri
+ * @returns {{did: string, collection: string, rkey: string}|null}
+ */
+function parseAtUri(uri) {
+	if (typeof uri !== 'string' || !uri.startsWith('at://')) return null;
+	const rest = uri.slice('at://'.length);
+	if (!rest) return null;
+	const [refDid, collection, rkey] = rest.split('/');
+	if (!refDid || !collection || !rkey) return null;
+	return { did: refDid, collection, rkey };
+}
+
+/**
+ * Pull a `subject` URI out of a record's decoded value, if there is one to
+ * find. Handles the documented shape (`subject: {uri, cid}`, as on
+ * `app.bsky.feed.like`/`.repost`) as well as a bare-string `subject`, since
+ * some lexicons may use that shape instead -- either way the result is only
+ * ever a candidate string, validated by `parseAtUri` before it's trusted.
+ * `value` is untrusted third-party data: it may not even be an object.
+ *
+ * @param {unknown} value
+ * @returns {unknown} whatever was found at `subject`/`subject.uri`, unvalidated
+ */
+function subjectUriOf(value) {
+	if (value == null || typeof value !== 'object') return null;
+	const subject = /** @type {any} */ (value).subject;
+	if (typeof subject === 'string') return subject;
+	if (subject != null && typeof subject === 'object') return subject.uri;
+	return null;
+}
+
+/**
  * The app link for a record: the owning domain plus the best URL to open.
- * `deep` is true only for the four documented Bluesky record shapes above;
- * everything else -- including a Bluesky collection outside that table, or
- * any deep link that can't be built for lack of a `rkey` -- falls back to
- * the domain root with `deep: false`.
+ *
+ * When the record's value carries a `subject.uri` pointing at another
+ * record (as `app.bsky.feed.like` and `.repost` do -- and any third-party
+ * lexicon shaped the same way, since this is driven by shape, not a
+ * collection allowlist), the link is resolved from THAT subject instead of
+ * from this record's own collection/did/rkey: a like should open the liked
+ * post, not bsky.app's home feed. `subject: true` marks a link resolved this
+ * way, so callers can word a button around "this opens something else"
+ * rather than implying the record links to itself.
+ *
+ * The subject is parsed defensively (see `parseAtUri`/`subjectUriOf`) --
+ * missing, null, a plain string, a malformed or non-`at://` URI all fall
+ * through to this record's own link, exactly as if there were no subject at
+ * all. A subject that parses fine but whose collection has no known route
+ * still prefers the SUBJECT's domain root over this record's, since the
+ * subject is what the button is about.
+ *
+ * Independent of that: `deep` is true only for the four documented Bluesky
+ * record shapes in `BLUESKY_DEEP_LINKS`; everything else -- including a
+ * Bluesky collection outside that table, or any deep link that can't be
+ * built for lack of a `rkey` -- falls back to the domain root with
+ * `deep: false`.
  *
  * @param {string|null|undefined} nsid
  * @param {string|null|undefined} did
  * @param {string|null|undefined} rkey
- * @returns {{domain: string, url: string, deep: boolean}|null}
+ * @param {unknown} [value] the record's decoded body, checked for `subject.uri`
+ * @returns {{domain: string, url: string, deep: boolean, subject?: true}|null}
  */
-export function appLinkFor(nsid, did, rkey) {
+export function appLinkFor(nsid, did, rkey, value) {
+	const subjectRef = parseAtUri(subjectUriOf(value));
+	if (subjectRef) {
+		const subjectDomain = appDomainOf(subjectRef.collection);
+		if (subjectDomain) {
+			const deepLink = BLUESKY_DEEP_LINKS[subjectRef.collection]?.(
+				subjectRef.did,
+				subjectRef.rkey
+			);
+			return deepLink
+				? { domain: subjectDomain, url: deepLink, deep: true, subject: true }
+				: { domain: subjectDomain, url: `https://${subjectDomain}/`, deep: false, subject: true };
+		}
+		// subject parsed cleanly but its own collection doesn't resolve to a
+		// domain -- fall through to this record's own link below.
+	}
+
 	const domain = appDomainOf(nsid);
 	if (!domain) return null;
 	const root = `https://${domain}/`;

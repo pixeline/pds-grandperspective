@@ -96,6 +96,32 @@ describe('readRepo', () => {
 		expect(onSizeGate).toHaveBeenCalled();
 	});
 
+	it('carries the resolved handle alongside the did', async () => {
+		const fetchImpl = routes({
+			car: () => new Response('nope', { status: 404 }),
+			describeRepo: () => ok({ collections: ['a.b.c'] }),
+			listRecords: () => ok({ records: [] })
+		});
+
+		const out = await readRepo('alice.test', { fetchImpl, now: NOW });
+
+		expect(out.did).toBe(DID);
+		expect(out.handle).toBe('alice.test');
+	});
+
+	it('returns a null handle when the input was already a DID', async () => {
+		const fetchImpl = routes({
+			car: () => new Response('nope', { status: 404 }),
+			describeRepo: () => ok({ collections: ['a.b.c'] }),
+			listRecords: () => ok({ records: [] })
+		});
+
+		const out = await readRepo(DID, { fetchImpl, now: NOW });
+
+		expect(out.did).toBe(DID);
+		expect(out.handle).toBeNull();
+	});
+
 	it('surfaces a failed identity resolution', async () => {
 		const fetchImpl = async () => new Response('no', { status: 400 });
 		await expect(readRepo('nope.test', { fetchImpl, now: NOW })).rejects.toThrow();
