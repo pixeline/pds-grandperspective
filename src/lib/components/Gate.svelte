@@ -22,7 +22,7 @@
     <h1>GrandPerspective<small>PDS EDITION</small></h1>
 
     <p class="tagline">
-      Every record in an atproto repository, drawn as the space it occupies.
+      Visualize all records in any atproto repository as a Tree Map diagram.
     </p>
 
     <div class="field">
@@ -44,7 +44,10 @@
         Cell area is the record's stored size, from the repository's CAR export.
       </li>
       <li>Sign in to edit or delete records in your own repository.</li>
-      <li>Reading a PDS can use tens of MB.</li>
+      <li>
+        Warning: reading a PDS can use tens of MB. Make sure you're on a WiFi
+        connection.
+      </li>
     </ul>
 
     <p class="example">
@@ -122,7 +125,8 @@
     opacity: 0.85;
   }
   .facts {
-    list-style: none;
+    list-style: ordered;
+    list-style-position: inside;
     margin: 0;
     padding: 0;
     display: flex;
@@ -136,7 +140,7 @@
     line-height: 1.55;
     color: var(--ink-soft);
     padding-left: 14px;
-    border-left: 2px solid var(--rule);
+    border-left: 0px solid var(--rule);
   }
   .example {
     font-size: 11px;
@@ -174,11 +178,16 @@
       padding: 28px max(20px, env(safe-area-inset-right)) 28px
         max(20px, env(safe-area-inset-left));
     }
-    .go { min-height: 48px; }
-    .link { padding: 6px 2px; }
+    .go {
+      min-height: 48px;
+    }
+    .link {
+      padding: 6px 2px;
+    }
     .gate-footer {
       padding: 16px max(20px, env(safe-area-inset-right))
-        calc(16px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+        calc(16px + env(safe-area-inset-bottom))
+        max(20px, env(safe-area-inset-left));
     }
   }
 </style>
