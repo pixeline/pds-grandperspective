@@ -44,6 +44,7 @@
         Cell area is the record's stored size, from the repository's CAR export.
       </li>
       <li>Sign in to edit or delete records in your own repository.</li>
+      <li>Reading a PDS can use tens of MB.</li>
     </ul>
 
     <p class="example">
