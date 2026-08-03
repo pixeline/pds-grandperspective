@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { hasRepoWrite, SCOPE } from './session.svelte.js';
+import { hasRepoWrite, oauthSupported, OAUTH_UNAVAILABLE_REASON, SCOPE } from './session.svelte.js';
 
 describe('SCOPE', () => {
 	// repo:* is the full wildcard, which the permission spec allows; partial
@@ -41,5 +41,21 @@ describe('hasRepoWrite', () => {
 		expect(hasRepoWrite(undefined)).toBe(false);
 		expect(hasRepoWrite(null)).toBe(false);
 		expect(hasRepoWrite('')).toBe(false);
+	});
+});
+
+describe('oauthSupported', () => {
+	it('allows secure production origins', () => {
+		expect(oauthSupported({ hostname: 'pixeline.be', isSecureContext: true })).toBe(true);
+	});
+
+	it('allows local loopback development over http', () => {
+		expect(oauthSupported({ hostname: '127.0.0.1', isSecureContext: false })).toBe(true);
+		expect(oauthSupported({ hostname: 'localhost', isSecureContext: false })).toBe(true);
+	});
+
+	it('rejects plain-http LAN addresses used for phone testing', () => {
+		expect(oauthSupported({ hostname: '192.168.10.41', isSecureContext: false })).toBe(false);
+		expect(OAUTH_UNAVAILABLE_REASON).toContain('plain HTTP over LAN');
 	});
 });
