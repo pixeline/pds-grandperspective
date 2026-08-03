@@ -1,4 +1,5 @@
 <script>
+	import { onDestroy } from 'svelte';
 	import Typeahead from './Typeahead.svelte';
 	import Footer from './Footer.svelte';
 	import { fmtBytes, fmtNum } from '$lib/repo/format.js';
@@ -19,8 +20,6 @@
 		onsignout
 	} = $props();
 
-	let signInHandle = $state('');
-
 	const isoDay = (ms) => (ms == null ? '' : new Date(ms).toISOString().slice(0, 10));
 
 	function setDate(key, value) {
@@ -34,6 +33,54 @@
 		else next.add(nsid);
 		filters = { ...filters, hidden: next };
 	}
+
+	// Hides every OTHER collection currently in the legend, expressed through
+	// the same `hidden` exclude-set rather than a second mental model -- "only"
+	// is just "hide everything but this one".
+	function onlyCollection(col) {
+		const next = new Set(legend.map(([c]) => c).filter((c) => c !== col));
+		filters = { ...filters, hidden: next };
+	}
+
+	function showAll() {
+		filters = { ...filters, hidden: new Set() };
+	}
+
+	const hasActiveFilters = $derived(
+		filters.hidden.size > 0 || filters.from != null || filters.to != null || filters.query.trim() !== ''
+	);
+
+	function clearFilters() {
+		queryInput = '';
+		filters = { ...filters, hidden: new Set(), from: null, to: null, query: '' };
+	}
+
+	// Search costs over a second end-to-end on a large repository, so the input
+	// is debounced: the visible field updates immediately (bound to a local
+	// value) but `filters.query` -- and therefore the refilter -- only changes
+	// 500ms after typing stops. Date inputs are NOT debounced; they fire once,
+	// on change, not per keystroke.
+	// Initialised once from the incoming filters (Rail only mounts once the
+	// repo view is entered, by which point a hash-restored query is already in
+	// `filters`). Afterward this local value is owned by Rail: the only writes
+	// to `filters.query` happen from here (debounce below) or from
+	// `clearFilters()`, both of which keep `queryInput` in sync explicitly --
+	// so there is no external race to resync against, and no risk of an
+	// unrelated filter change (e.g. a legend toggle) clobbering text the user
+	// is mid-typing.
+	let queryInput = $state(filters.query);
+	/** @type {ReturnType<typeof setTimeout> | null} */
+	let queryTimer = null;
+
+	function onQueryInput(e) {
+		queryInput = e.currentTarget.value;
+		clearTimeout(queryTimer ?? undefined);
+		queryTimer = setTimeout(() => {
+			filters = { ...filters, query: queryInput };
+		}, 500);
+	}
+
+	onDestroy(() => clearTimeout(queryTimer ?? undefined));
 </script>
 
 <aside class="rail">
@@ -43,36 +90,23 @@
 		<span class="lbl">Repository</span>
 		<Typeahead bind:value={handle} onsubmit={(h) => ondraw(h)} />
 		<div class="row">
-			<button onclick={() => ondraw()} disabled={busy}>Read</button>
-			<button class="ghost" onclick={() => onstop()} disabled={!busy}>Stop</button>
+			<button onclick={() => (busy ? onstop() : ondraw())}>{busy ? 'Stop' : 'Read'}</button>
+			{#if session?.did}
+				<button class="ghost" onclick={() => onsignout()}>Sign out</button>
+			{:else}
+				<button class="ghost" onclick={() => onsignin(handle)}>Sign in</button>
+			{/if}
 		</div>
-	</div>
-
-	<hr />
-
-	<div class="grp">
-		<span class="lbl">Session</span>
 		{#if session?.did}
-			<p class="note">Signed in as <b>{session.handle}</b></p>
+			<p class="note">signed in as <b>{session.handle}</b></p>
 			{#if !session.canWrite}
 				<p class="note warn">
 					Your authorization server did not grant repository write access. Editing is disabled.
 				</p>
 			{/if}
-			<button class="ghost" onclick={() => onsignout()}>Sign out</button>
-		{:else}
-			<p class="note">Sign in to edit or delete records in your own repository.</p>
-			<input
-				class="txt"
-				type="text"
-				placeholder="your.handle"
-				bind:value={signInHandle}
-				onkeydown={(e) => e.key === 'Enter' && onsignin(signInHandle)}
-			/>
-			<button onclick={() => onsignin(signInHandle)}>Sign in</button>
-			{#if session?.error}
-				<p class="note warn">{session.error}</p>
-			{/if}
+		{/if}
+		{#if session?.error}
+			<p class="note warn">{session.error}</p>
 		{/if}
 	</div>
 
@@ -84,26 +118,43 @@
 			class="txt"
 			type="search"
 			placeholder="search record content"
-			value={filters.query}
-			oninput={(e) => (filters = { ...filters, query: e.currentTarget.value })}
+			value={queryInput}
+			oninput={onQueryInput}
 		/>
 		<div class="row">
 			<label class="dt">
 				<span>from</span>
-				<input type="date" value={isoDay(filters.from)} onchange={(e) => setDate('from', e.currentTarget.value)} />
+				<div class="dtrow">
+					<input
+						type="date"
+						value={isoDay(filters.from)}
+						onchange={(e) => setDate('from', e.currentTarget.value)}
+					/>
+					{#if filters.from != null}
+						<button class="clr" onclick={() => setDate('from', '')} aria-label="clear from date"
+							>&times;</button
+						>
+					{/if}
+				</div>
 			</label>
 			<label class="dt">
 				<span>to</span>
-				<input type="date" value={isoDay(filters.to)} onchange={(e) => setDate('to', e.currentTarget.value)} />
+				<div class="dtrow">
+					<input
+						type="date"
+						value={isoDay(filters.to)}
+						onchange={(e) => setDate('to', e.currentTarget.value)}
+					/>
+					{#if filters.to != null}
+						<button class="clr" onclick={() => setDate('to', '')} aria-label="clear to date"
+							>&times;</button
+						>
+					{/if}
+				</div>
 			</label>
 		</div>
-		{#if filters.hidden.size}
-			<button
-				class="ghost sm"
-				onclick={() => (filters = { ...filters, hidden: new Set() })}
-			>
-				clear {filters.hidden.size} collection filter{filters.hidden.size > 1 ? 's' : ''}
-			</button>
+		{#if hasActiveFilters}
+			<button class="ghost sm" onclick={clearFilters}>Clear filters</button>
 		{/if}
 	</div>
 
@@ -147,20 +198,35 @@
 	</div>
 
 	<div class="grp">
-		<span class="lbl">Hue = collection</span>
+		<div class="legend-head">
+			<span class="lbl">Hue = collection</span>
+			{#if filters.hidden.size}
+				<button class="ghost sm" onclick={showAll}>Show all</button>
+			{/if}
+		</div>
 		<div class="legend">
 			{#if legend.length}
 				{#each legend as [col, n] (col)}
-					<button
-						class="leg"
-						class:on={filters.hidden.has(col)}
-						onclick={() => toggleCollection(col)}
-						title="{col} — click to filter"
-					>
-						<i style="background:hsl({hueOf.get(col)} 74% 50%)"></i>
-						<span>{col}</span>
-						<b>{fmtNum(n)}</b>
-					</button>
+					{@const isHidden = filters.hidden.has(col)}
+					<div class="leg" class:hidden={isHidden}>
+						<button
+							class="leg-main"
+							onclick={() => toggleCollection(col)}
+							title="{col} — click to {isHidden ? 'show' : 'hide'}"
+						>
+							<i
+								class="swatch"
+								class:hollow={isHidden}
+								style="--hue:{hueOf.get(col)}"
+								aria-hidden="true"
+							></i>
+							<span>{col}</span>
+							<b>{fmtNum(n)}</b>
+						</button>
+						<button class="only" onclick={() => onlyCollection(col)} title="show only {col}">
+							only
+						</button>
+					</div>
 				{/each}
 			{:else}
 				<p class="note">Nothing read yet.</p>
@@ -229,7 +295,8 @@
 	}
 	.dt { display: flex; flex-direction: column; gap: 3px; }
 	.dt span { font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
-	.dt input {
+	.dtrow { display: flex; align-items: stretch; gap: 3px; }
+	.dtrow input {
 		font-family: 'IBM Plex Mono', monospace;
 		font-size: 10.5px;
 		padding: 6px;
@@ -237,13 +304,36 @@
 		background: var(--ground);
 		color: var(--ink);
 		width: 100%;
+		flex: 1;
 	}
+	.clr {
+		flex: none;
+		width: 22px;
+		padding: 0;
+		font-size: 12px;
+		line-height: 1;
+		background: transparent;
+		color: var(--ink-soft);
+		border: 1px solid var(--rule);
+	}
+	.clr:hover { color: var(--ink); border-color: var(--ink); }
 	table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; }
 	td { padding: 2px 0; vertical-align: top; }
 	td.k { color: var(--ink-soft); }
 	td.v { text-align: right; font-weight: 500; }
+	.legend-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+	.legend-head .ghost.sm { padding: 3px 6px; }
 	.legend, .errs { display: flex; flex-direction: column; gap: 3px; }
 	.leg {
+		display: grid;
+		grid-template-columns: 1fr auto;
+		align-items: center;
+		gap: 6px;
+		border-left: 2px solid transparent;
+		padding-left: 4px;
+	}
+	.leg.hidden { opacity: 0.45; }
+	.leg-main {
 		display: grid;
 		grid-template-columns: 11px 1fr auto;
 		gap: 7px;
@@ -252,8 +342,7 @@
 		font-size: 10px;
 		background: transparent;
 		border: 0;
-		border-left: 2px solid transparent;
-		padding: 1px 0 1px 4px;
+		padding: 1px 0;
 		color: var(--ink);
 		text-transform: none;
 		letter-spacing: 0;
@@ -261,10 +350,31 @@
 		text-align: left;
 		cursor: pointer;
 	}
-	.leg.on { border-left-color: var(--ink); }
-	.leg i { width: 11px; height: 11px; display: block; }
-	.leg span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
-	.leg b { font-weight: 500; color: var(--ink-soft); }
+	/* Swatch colour is data, so "hidden" is never signalled by colour alone --
+	   a filled square is active, a hollow (outlined-only) square is hidden. */
+	.swatch {
+		width: 11px;
+		height: 11px;
+		display: block;
+		background: hsl(var(--hue) 74% 50%);
+		border: 1px solid hsl(var(--hue) 74% 50%);
+	}
+	.swatch.hollow { background: transparent; }
+	.leg-main span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+	.leg-main b { font-weight: 500; color: var(--ink-soft); }
+	.only {
+		flex: none;
+		font-family: 'IBM Plex Mono', monospace;
+		font-size: 8.5px;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		background: transparent;
+		color: var(--ink-soft);
+		border: 0;
+		padding: 1px 2px;
+		cursor: pointer;
+	}
+	.only:hover { color: var(--ink); }
 	.errs { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); }
 	.e { display: flex; justify-content: space-between; gap: 8px; }
 	hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
