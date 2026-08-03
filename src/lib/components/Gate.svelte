@@ -1,143 +1,162 @@
 <script>
-	import Typeahead from './Typeahead.svelte';
-	import Footer from './Footer.svelte';
+  import Typeahead from "./Typeahead.svelte";
+  import Footer from "./Footer.svelte";
 
-	let { handle = $bindable(''), onpick } = $props();
+  // set handle by default to be jcsalterego.bsky.social
+  let { handle = $bindable("jcsalterego.bsky.social"), onpick } = $props();
 
-	function submit() {
-		if (handle.trim()) onpick(handle);
-	}
+  function submit() {
+    if (handle.trim()) onpick(handle);
+  }
 </script>
 
 <div class="gate">
-	<div class="gate-inner">
-		<h1>GrandPerspective<small>PDS EDITION</small></h1>
+  <div class="gate-inner">
+    <div>
+      <img src="/favicon.svg" width="200" alt="GrandPerspective Logo" />
+    </div>
 
-		<p class="tagline">
-			Every record in an atproto repository, drawn as the space it occupies.
-		</p>
+    <h1>GrandPerspective<small>PDS EDITION</small></h1>
 
-		<div class="field">
-			<Typeahead bind:value={handle} big autofocus onsubmit={(h) => onpick(h)} />
-			<button class="go" onclick={submit}>Read repository</button>
-		</div>
+    <p class="tagline">
+      Every record in an atproto repository, drawn as the space it occupies.
+    </p>
 
-		<ul class="facts">
-			<li>Every collection, including unknown lexicons. Read straight from the PDS.</li>
-			<li>Cell area is the record's stored size, from the repository's CAR export.</li>
-			<li>Sign in to edit or delete records in your own repository.</li>
-		</ul>
+    <div class="field">
+      <Typeahead
+        bind:value={handle}
+        big
+        autofocus
+        onsubmit={(h) => onpick(h)}
+      />
+      <button class="go" onclick={submit}>Read repository</button>
+    </div>
 
-		<p class="example">
-			See it work: <button class="link" onclick={() => onpick('pixeline.be')}>pixeline.be</button>
-		</p>
-	</div>
+    <ul class="facts">
+      <li>
+        Every collection, including unknown lexicons. Read straight from the
+        PDS.
+      </li>
+      <li>
+        Cell area is the record's stored size, from the repository's CAR export.
+      </li>
+      <li>Sign in to edit or delete records in your own repository.</li>
+    </ul>
 
-	<div class="gate-footer">
-		<Footer />
-	</div>
+    <p class="example">
+      See it work: <button class="link" onclick={() => onpick("pfrazee.com")}
+        >pfrazee.com</button
+      >
+    </p>
+  </div>
+
+  <div class="gate-footer">
+    <Footer />
+  </div>
 </div>
 
 <style>
-	.gate {
-		position: absolute;
-		inset: 0;
-		display: flex;
-		flex-direction: column;
-		overflow-y: auto;
-	}
-	.gate-inner {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		align-items: stretch;
-		justify-content: center;
-		gap: 26px;
-		padding: 48px 28px;
-		width: min(520px, 100%);
-		margin: 0 auto;
-		text-align: center;
-	}
-	h1 {
-		font-size: 19px;
-		font-weight: 800;
-		letter-spacing: -0.03em;
-		text-transform: uppercase;
-		margin: 0;
-		line-height: 1.05;
-	}
-	h1 small {
-		display: block;
-		font-size: 10px;
-		font-weight: 600;
-		letter-spacing: 0.18em;
-		color: var(--ink-soft);
-		margin-top: 7px;
-	}
-	.tagline {
-		font-size: 14px;
-		line-height: 1.5;
-		color: var(--ink);
-		margin: 0;
-	}
-	.field {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-	}
-	.go {
-		font-family: 'Archivo', sans-serif;
-		font-size: 11px;
-		font-weight: 700;
-		letter-spacing: 0.12em;
-		text-transform: uppercase;
-		padding: 12px 14px;
-		border: 1px solid var(--ink);
-		background: var(--ink);
-		color: var(--paper);
-		cursor: pointer;
-	}
-	.go:hover { opacity: 0.85; }
-	.facts {
-		list-style: none;
-		margin: 0;
-		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-		text-align: left;
-	}
-	.facts li {
-		font-family: 'IBM Plex Mono', monospace;
-		font-size: 11px;
-		line-height: 1.55;
-		color: var(--ink-soft);
-		padding-left: 14px;
-		border-left: 2px solid var(--rule);
-	}
-	.example {
-		font-size: 11px;
-		color: var(--ink-soft);
-		margin: 0;
-	}
-	.link {
-		font: inherit;
-		background: none;
-		border: 0;
-		padding: 0;
-		color: var(--ink);
-		cursor: pointer;
-		border-bottom: 1px solid var(--rule);
-	}
-	.link:hover,
-	.link:focus-visible {
-		border-bottom-color: var(--ink);
-		outline: none;
-	}
-	.gate-footer {
-		display: flex;
-		justify-content: center;
-		padding: 16px 28px;
-		border-top: 1px solid var(--rule);
-	}
+  .gate {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .gate-inner {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 26px;
+    padding: 48px 28px;
+    width: min(520px, 100%);
+    margin: 0 auto;
+    text-align: center;
+  }
+  h1 {
+    font-size: 19px;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    text-transform: uppercase;
+    margin: 0;
+    line-height: 1.05;
+  }
+  h1 small {
+    display: block;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    color: var(--ink-soft);
+    margin-top: 7px;
+  }
+  .tagline {
+    font-size: 14px;
+    line-height: 1.5;
+    color: var(--ink);
+    margin: 0;
+  }
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .go {
+    font-family: "Archivo", sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 12px 14px;
+    border: 1px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper);
+    cursor: pointer;
+  }
+  .go:hover {
+    opacity: 0.85;
+  }
+  .facts {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    text-align: left;
+  }
+  .facts li {
+    font-family: "IBM Plex Mono", monospace;
+    font-size: 11px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    padding-left: 14px;
+    border-left: 2px solid var(--rule);
+  }
+  .example {
+    font-size: 11px;
+    color: var(--ink-soft);
+    margin: 0;
+  }
+  .link {
+    font: inherit;
+    background: none;
+    border: 0;
+    padding: 0;
+    color: var(--ink);
+    cursor: pointer;
+    border-bottom: 1px solid var(--rule);
+  }
+  .link:hover,
+  .link:focus-visible {
+    border-bottom-color: var(--ink);
+    outline: none;
+  }
+  .gate-footer {
+    display: flex;
+    justify-content: center;
+    padding: 16px 28px;
+    border-top: 1px solid var(--rule);
+  }
 </style>
