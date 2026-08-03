@@ -274,14 +274,34 @@
 	onMount(async () => {
 		// the OAuth callback arrives as ?code=…&state=… on this same route, so it
 		// MUST be resolved before the hash is read or the redirect races the
-		// state restore
+		// state restore. session.init() never throws (failures land in
+		// session.error), so this always runs -- a failed restore must not
+		// skip the hash restore below, it just means session.did stays null.
 		await session.init();
 
 		const s = fromHash(location.hash);
 		handle = s.handle;
 		weigh = s.weigh;
 		filters = { hidden: s.hidden, from: s.from, to: s.to, query: s.query };
-		if (s.handle) draw();
+		if (s.handle) {
+			// An explicit #h= always wins, even when signed in: a shared link to
+			// someone else's repo must not be hijacked into the signed-in user's
+			// own.
+			draw();
+		} else if (session.did) {
+			// Landing back here straight from the OAuth callback (no explicit
+			// handle in the URL): session.init() just established a real
+			// session, but nothing has been read yet, so the entry screen would
+			// otherwise show no sign of it -- reported as "went back to the
+			// home screen, seemingly unlogged". Go straight to reading the
+			// signed-in user's own repo instead. draw() flips `entered` (and
+			// `busy`) synchronously, before any awaiting happens, so the rail
+			// (which shows "signed in as <handle>") and the firehose reading
+			// state appear immediately rather than a blank entry screen
+			// appearing to hang through what can be a large read (~56 MB for
+			// the account this was reported against).
+			draw(session.handle ?? session.did);
+		}
 	});
 </script>
 
