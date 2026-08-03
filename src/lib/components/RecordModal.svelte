@@ -131,7 +131,7 @@
 				: !isOwnRepo
 					? 'You can only edit records in your own repository.'
 					: !canWrite
-						? 'Your authorization server did not grant repository write access.'
+						? 'No write access granted.'
 						: null
 	);
 
@@ -389,8 +389,8 @@
 
 		{#if record.aggregate}
 			<p class="note">
-				{record.records} records, {fmtBytes(record.bytes)} total. This block is drawn whole
-				because its cells would be smaller than a pixel — no single record is being shown.
+				{record.records} records, {fmtBytes(record.bytes)}. Cells would be under a pixel, so
+				the block is drawn whole — no single record shown.
 			</p>
 		{:else if editing}
 			<textarea bind:value={text} spellcheck="false" aria-label="Record JSON"></textarea>

@@ -114,9 +114,7 @@
 		{#if session?.did}
 			<p class="note">signed in as <b>{session.handle}</b></p>
 			{#if !session.canWrite}
-				<p class="note warn">
-					Your authorization server did not grant repository write access. Editing is disabled.
-				</p>
+				<p class="note warn">No write access granted. Editing disabled.</p>
 			{/if}
 		{/if}
 		{#if session?.error}
@@ -283,9 +281,9 @@
 					<div class="e"><span>{name}</span><b>{n}</b></div>
 				{/each}
 			{:else if stats}
-				<p class="note">No invalid records. That is the honest result, not a bug.</p>
+				<p class="note">No invalid records.</p>
 			{:else}
-				<p class="note">Errors are reported, never decorated.</p>
+				<p class="note">Nothing read yet.</p>
 			{/if}
 		</div>
 	</div>

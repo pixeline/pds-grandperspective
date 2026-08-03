@@ -23,12 +23,9 @@
 		</div>
 
 		<ul class="facts">
-			<li>
-				Reads every collection, including lexicons it has never seen — straight from the PDS,
-				with no server in between.
-			</li>
-			<li>A cell's area is the record's real stored size, measured from the repository's own CAR export.</li>
-			<li>Sign in with your own account to edit or delete your own records.</li>
+			<li>Every collection, including unknown lexicons. Read straight from the PDS.</li>
+			<li>Cell area is the record's stored size, from the repository's CAR export.</li>
+			<li>Sign in to edit or delete records in your own repository.</li>
 		</ul>
 
 		<p class="example">
