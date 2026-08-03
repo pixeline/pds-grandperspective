@@ -64,7 +64,14 @@ function fakeSession(respond = async () => new Response('{}', { status: 200 })) 
 }
 
 describe('putRecord', () => {
-	it('posts to the putRecord xrpc endpoint with the right body', async () => {
+	// putRecord (the app function) deliberately does NOT call the
+	// com.atproto.repo.putRecord xrpc endpoint -- see the comment in write.js.
+	// putRecord (the xrpc proc) is an upsert and unconditionally asserts both
+	// the `create` and `update` repo actions, which would 403 against the
+	// narrower update+delete-only scope this app actually requests. Routing
+	// through applyWrites with a single #update operation asserts only
+	// `update`, which the existing grant already covers.
+	it('posts to applyWrites with a single #update operation, not the putRecord endpoint', async () => {
 		const session = fakeSession();
 		await putRecord(session, {
 			did: 'did:plc:abc',
@@ -72,14 +79,32 @@ describe('putRecord', () => {
 			rkey: 'k1',
 			value: { $type: 'a.b.c' }
 		});
-		expect(session.calls[0].pathname).toBe('/xrpc/com.atproto.repo.putRecord');
+		expect(session.calls[0].pathname).toBe('/xrpc/com.atproto.repo.applyWrites');
 		expect(session.calls[0].method).toBe('POST');
 		expect(session.calls[0].body).toEqual({
 			repo: 'did:plc:abc',
-			collection: 'a.b.c',
-			rkey: 'k1',
-			record: { $type: 'a.b.c' }
+			writes: [
+				{
+					$type: 'com.atproto.repo.applyWrites#update',
+					collection: 'a.b.c',
+					rkey: 'k1',
+					value: { $type: 'a.b.c' }
+				}
+			]
 		});
+	});
+
+	// The property that actually protects the narrow grant: no write this app
+	// issues may ever contain a create operation, since the granted scope has
+	// `create` deliberately absent. If this regresses, editing would start
+	// 403ing again (or worse, silently start requesting a scope this app was
+	// never meant to have).
+	it('never includes a create operation in the write', async () => {
+		const session = fakeSession();
+		await putRecord(session, { did: 'did:plc:abc', col: 'a.b.c', rkey: 'k1', value: {} });
+		const { writes } = session.calls[0].body;
+		expect(writes.some((w) => w.$type.endsWith('#create'))).toBe(false);
+		expect(writes.every((w) => w.$type === 'com.atproto.repo.applyWrites#update')).toBe(true);
 	});
 
 	it('propagates the server error verbatim rather than swallowing it', async () => {

@@ -127,11 +127,33 @@ async function procedure(session, nsid, body) {
  * @param {{did: string, col: string, rkey: string, value: any}} p
  */
 export async function putRecord(session, { did, col, rkey, value }) {
-	await procedure(session, 'com.atproto.repo.putRecord', {
+	// Deliberately NOT com.atproto.repo.putRecord. putRecord is an upsert, and
+	// the PDS cannot tell from the auth phase alone whether a given call will
+	// create or overwrite -- so it unconditionally asserts BOTH the `create`
+	// and `update` repo actions before running (packages/pds/src/api/com/
+	// atproto/repo/putRecord.ts). The granted scope here is `update`+`delete`
+	// only, `create` deliberately excluded (see SCOPE in session.svelte.js),
+	// so putRecord always 403s with a missing-scope error for this app, even
+	// though it only ever edits records that already exist.
+	//
+	// applyWrites asserts per operation type instead: a request containing
+	// only an `#update` write asserts only the `update` action (packages/pds/
+	// src/api/com/atproto/repo/applyWrites.ts). That matches what this app
+	// actually does and what the owner actually consented to, so it works
+	// with the existing grant -- no re-authorization, no widened scope.
+	//
+	// Do not "simplify" this back to putRecord. It will pass against a mock
+	// and fail 403 against a real PDS.
+	await procedure(session, 'com.atproto.repo.applyWrites', {
 		repo: did,
-		collection: col,
-		rkey,
-		record: value
+		writes: [
+			{
+				$type: 'com.atproto.repo.applyWrites#update',
+				collection: col,
+				rkey,
+				value
+			}
+		]
 	});
 }
 
