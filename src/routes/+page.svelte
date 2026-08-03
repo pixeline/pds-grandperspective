@@ -15,6 +15,7 @@
   import { selectDominantCollection } from "$lib/repo/dominance.js";
   import { defaultState, fromHash, toHash } from "$lib/repo/urlstate.js";
   import { getConnection } from "$lib/util/connection.js";
+  import { replaceState } from "$app/navigation";
 
   const session = createSessionStore();
 
@@ -164,7 +165,7 @@
 
   $effect(() => {
     if (!data && !handle) return;
-    history.replaceState(
+    replaceState(
       null,
       "",
       toHash({ ...defaultState(), handle, weigh, ...filters }),
