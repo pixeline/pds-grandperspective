@@ -1,30 +1,12 @@
 <script>
-	import { base } from '$app/paths';
 	let { children } = $props();
 </script>
 
-<svelte:head>
-	<!-- The icon is a real squarified layout of real stored bytes from a real
-	     repository, coloured by the same golden-angle walk over sorted NSIDs
-	     that the map itself uses -- so app.bsky.feed.post is the same purple
-	     here as on screen. Generated with app.bsky.feed.like excluded, exactly
-	     as the app now auto-hides it, because a 89% single-colour square says
-	     nothing about what the tool does. Paths are base-relative so the build
-	     stays droppable into any subfolder. -->
-	<link rel="icon" type="image/svg+xml" href="{base}/favicon.svg" />
-	<link rel="icon" type="image/png" sizes="32x32" href="{base}/icon-32.png" />
-	<link rel="icon" type="image/png" sizes="16x16" href="{base}/icon-16.png" />
-	<link rel="alternate icon" href="{base}/favicon.ico" />
-	<link rel="apple-touch-icon" sizes="180x180" href="{base}/apple-touch-icon.png" />
-	<link rel="manifest" href="{base}/manifest.webmanifest" />
-	<meta name="theme-color" content="#171717" />
-	<link rel="preconnect" href="https://fonts.googleapis.com" />
-	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-	<link
-		href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&display=swap"
-		rel="stylesheet"
-	/>
-</svelte:head>
+<!-- Icons, the manifest and the font links live in `src/app.html`, not here.
+     This app ships with ssr=false, so build/index.html is a shell and nothing
+     from a component's <svelte:head> reaches the static HTML -- a browser
+     fetches the favicon and reads the manifest before hydration, and
+     render-blocking font links belong in the first response too. -->
 
 {@render children()}
 
