@@ -3,8 +3,7 @@
 </script>
 
 <!-- Icons, the manifest and the font links live in `src/app.html`, not here.
-     This app ships with ssr=false, so build/index.html is a shell and nothing
-     from a component's <svelte:head> reaches the static HTML -- a browser
+	A browser
      fetches the favicon and reads the manifest before hydration, and
      render-blocking font links belong in the first response too. -->
 
