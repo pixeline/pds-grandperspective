@@ -13,6 +13,14 @@ Everything runs client-side. There is no server, no proxy, and no credential
 ever leaves your browser — public repo reads need no authentication at all, and
 writes use atproto OAuth.
 
+Each record's modal offers an "Open on `<domain>`" link to the app that owns
+its lexicon (derived from the NSID by reverse-DNS, e.g. `app.bsky.feed.post`
+→ `bsky.app`). For that button's icon, the tool first tries the app's own
+`favicon.ico`; if that fails it falls back to DuckDuckGo's icon service
+(`icons.duckduckgo.com`), which means DuckDuckGo can see which app's records
+you're inspecting. That's the one third-party request in an otherwise
+fully client-to-PDS tool — accepted for icon coverage, not an oversight.
+
 ## Development
 
     npm install

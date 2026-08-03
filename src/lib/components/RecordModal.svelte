@@ -8,6 +8,7 @@
 	} from '$lib/atproto/write.js';
 	import { fmtBytes, fmtDate } from '$lib/repo/format.js';
 	import { tidToMs } from '$lib/atproto/tid.js';
+	import { appLinkFor } from '$lib/repo/appOf.js';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	/** @type {{record: import('$lib/repo/types.js').ModalRecord | null, did: string | null,
@@ -234,6 +235,72 @@
 		a.click();
 		a.remove();
 	}
+
+	// The app that owns this record's lexicon, and the best URL to open on it
+	// (deep link for the four documented Bluesky shapes, domain root
+	// otherwise). An aggregate block has no single record behind it, so it
+	// always links to the domain root -- pass `null` rather than the label-only
+	// `rkey` an AggregateHit carries.
+	const appLink = $derived(
+		record ? appLinkFor(record.col, did, record.aggregate ? null : record.rkey) : null
+	);
+
+	/** @param {string} domain */
+	function iconSourcesFor(domain) {
+		return [
+			`https://${domain}/favicon.ico`,
+			// Fallback only, tried after the direct favicon fails or 404s.
+			// Requesting an icon from DuckDuckGo tells DuckDuckGo which app's
+			// records this user is inspecting -- a third party this tool
+			// otherwise avoids entirely (see README). Direct-first keeps 59%
+			// of lookups from ever reaching a third party at all; this
+			// fallback is what takes total icon coverage from 59% to 70%,
+			// which the owner judged worth that cost. Not an oversight.
+			`https://icons.duckduckgo.com/ip3/${domain}.ico`
+		];
+	}
+
+	// Which candidate (0 = direct, 1 = DuckDuckGo, past the end = give up) is
+	// currently shown, and whether both have failed. Reset per domain, not
+	// per record: switching between two records on the same app should not
+	// re-show an icon that already proved unreachable this session.
+	let iconSrcIndex = $state(0);
+	let iconGaveUp = $state(false);
+	/** @type {string|null} */
+	let lastIconDomain = null;
+	$effect(() => {
+		const domain = appLink?.domain ?? null;
+		if (domain === lastIconDomain) return;
+		lastIconDomain = domain;
+		iconSrcIndex = 0;
+		iconGaveUp = false;
+	});
+
+	const iconSrc = $derived(
+		appLink && !iconGaveUp ? iconSourcesFor(appLink.domain)[iconSrcIndex] : null
+	);
+
+	function iconError() {
+		if (!appLink) return;
+		if (iconSrcIndex < iconSourcesFor(appLink.domain).length - 1) {
+			iconSrcIndex += 1;
+		} else {
+			// both candidates failed -- hide the image entirely rather than
+			// leave a broken-image glyph; the button stays fully usable as text
+			iconGaveUp = true;
+		}
+	}
+
+	function openApp() {
+		if (!appLink) return;
+		const a = document.createElement('a');
+		a.href = appLink.url;
+		a.target = '_blank';
+		a.rel = 'noopener noreferrer';
+		document.body.appendChild(a);
+		a.click();
+		a.remove();
+	}
 </script>
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && !busy && onclose?.()} />
@@ -288,6 +355,15 @@
 
 		<footer>
 			<button class="ghost" onclick={pdsls}>Open on pdsls.dev</button>
+
+			{#if appLink}
+				<button class="ghost app-link" onclick={openApp}>
+					{#if iconSrc}
+						<img class="app-icon" src={iconSrc} alt="" aria-hidden="true" onerror={iconError} />
+					{/if}
+					Open on {appLink.domain}
+				</button>
+			{/if}
 
 			{#if writable}
 				{#if editing}
@@ -384,6 +460,8 @@
 		cursor: pointer;
 	}
 	button.ghost { background: transparent; color: var(--ink); }
+	button.app-link { display: inline-flex; align-items: center; gap: 6px; }
+	.app-icon { width: 16px; height: 16px; border-radius: 0; box-shadow: none; object-fit: contain; }
 	button.danger { background: var(--paper); color: var(--ink); border-width: 2px; }
 	button:disabled { opacity: 0.35; cursor: default; }
 	.x { background: transparent; color: var(--ink-soft); border: 0; padding: 4px; }
