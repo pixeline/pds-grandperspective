@@ -82,6 +82,7 @@ export function createSessionStore() {
 		get error() { return error; },
 
 		async init() {
+			error = null;
 			try {
 				client = await BrowserOAuthClient.load({
 					clientId: clientId(),
@@ -109,13 +110,37 @@ export function createSessionStore() {
 			}
 		},
 
+		// Failures here MUST land in `error`, the same as init() -- signIn()
+		// used to let a rejection escape as an unhandled promise rejection,
+		// which +page.svelte called without a catch, so a bad handle produced
+		// no visible feedback at all. Every exit from this function either
+		// starts a navigation away (success) or sets `error` (failure); never
+		// both silent.
 		async signIn(input) {
-			if (!client) throw new Error('session not initialised');
-			await client.signIn(input.trim().replace(/^@/, ''), { scope: SCOPE });
+			error = null;
+			const cleaned = String(input ?? '').trim().replace(/^@/, '');
+			if (!cleaned) {
+				error = 'Enter a handle or DID to sign in with.';
+				return;
+			}
+			if (!client) {
+				error = 'Session is still initialising. Try again in a moment.';
+				return;
+			}
+			try {
+				await client.signIn(cleaned, { scope: SCOPE });
+			} catch (e) {
+				error = String(e?.message ?? e);
+			}
 		},
 
 		async signOut() {
-			await agent?.signOut?.();
+			error = null;
+			try {
+				await agent?.signOut?.();
+			} catch (e) {
+				error = String(e?.message ?? e);
+			}
 			agent = null;
 			did = null;
 			handle = null;
