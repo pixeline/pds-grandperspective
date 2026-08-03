@@ -6,6 +6,7 @@
   import Firehose from "$lib/components/Firehose.svelte";
   import RecordModal from "$lib/components/RecordModal.svelte";
   import Tip from "$lib/components/Tip.svelte";
+  import WifiWarning from "$lib/components/WifiWarning.svelte";
   import { readRepo } from "$lib/atproto/read.js";
   import { createSessionStore } from "$lib/atproto/session.svelte.js";
   import { collectionHues } from "$lib/repo/hues.js";
@@ -13,6 +14,7 @@
   import { resolveHit } from "$lib/repo/resolveHit.js";
   import { selectDominantCollection } from "$lib/repo/dominance.js";
   import { defaultState, fromHash, toHash } from "$lib/repo/urlstate.js";
+  import { getConnection } from "$lib/util/connection.js";
 
   const session = createSessionStore();
 
@@ -48,6 +50,16 @@
   // Keys (`col/rkey`) of records edited in this session, kept separate from
   // `data.exact`/`data.source` -- see the stats derivation below for why.
   let editedKeys = $state(new Set());
+  // Session-scoped dismiss for the slow-network warning banner. The page owns
+  // dismissed state so the same WifiWarning instance handles one read's banner;
+  // a fresh read on a slow network shows it again only after a page reload.
+  let connectionDismissed = $state(false);
+  // `navigator.connection` is absent on iOS Safari and most desktops; the
+  // module returns isSlow:false in that case, so the banner is simply never
+  // shown -- and listening for `change` is unnecessary for a single read
+  // session, where the user either is or isn't on a slow network at the moment
+  // they pressed Read. Reading once on mount keeps the wiring minimal.
+  const connection = $derived(getConnection());
 
   // The collection auto-hidden at the end of the read that produced `data`
   // (see draw()), and its share of that read's total bytes -- or null if
@@ -449,6 +461,10 @@
     {#if !entered}
       <Gate bind:handle onpick={onPick} />
     {:else if busy}
+      <WifiWarning
+        visible={connection.isSlow && !connectionDismissed}
+        ondismiss={() => (connectionDismissed = true)}
+      />
       <Firehose
         {phase}
         bytes={gotBytes}
