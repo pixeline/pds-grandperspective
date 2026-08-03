@@ -2,8 +2,11 @@
   import Typeahead from "./Typeahead.svelte";
   import Footer from "./Footer.svelte";
 
-  // set handle by default to be jcsalterego.bsky.social
-  let { handle = $bindable("jcsalterego.bsky.social"), onpick } = $props();
+  // No default handle: `+page.svelte` binds `handle = $state("")` over this, so
+  // the fallback never applied and the field has always rendered empty. A
+  // suggested repository is already offered, honestly labelled, by the "See it
+  // work" link below.
+  let { handle = $bindable(""), onpick } = $props();
 
   function submit() {
     if (handle.trim()) onpick(handle);
@@ -158,5 +161,23 @@
     justify-content: center;
     padding: 16px 28px;
     border-top: 1px solid var(--rule);
+  }
+
+  @media (max-width: 820px) {
+    .gate-inner {
+      /* Centring stays: `flex: 1` keeps this item at least its content height
+         (automatic minimum size), so a landscape phone whose content is taller
+         than the viewport scrolls via .gate's overflow-y rather than being
+         clipped symmetrically by the centring. */
+      gap: 20px;
+      padding: 28px max(20px, env(safe-area-inset-right)) 28px
+        max(20px, env(safe-area-inset-left));
+    }
+    .go { min-height: 48px; }
+    .link { padding: 6px 2px; }
+    .gate-footer {
+      padding: 16px max(20px, env(safe-area-inset-right))
+        calc(16px + env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left));
+    }
   }
 </style>

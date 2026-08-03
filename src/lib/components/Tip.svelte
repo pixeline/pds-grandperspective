@@ -33,7 +33,11 @@
 		position: absolute;
 		right: 18px;
 		top: 104px;
-		width: 262px;
+		/* A touch never opens this (Treemap ignores hover from a touch pointer),
+		   but a narrow window with a real pointer does -- a phone-sized browser
+		   on a desktop, or a tablet with a trackpad -- and a fixed 262px would
+		   hang off the edge there. */
+		width: min(262px, calc(100% - 36px));
 		background: var(--paper);
 		border: 1px solid var(--rule);
 		padding: 10px 12px;

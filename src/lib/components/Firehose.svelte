@@ -112,4 +112,33 @@
 	@media (prefers-reduced-motion: reduce) {
 		.ln:nth-last-child(n + 12) { opacity: 1; }
 	}
+
+	/* Side by side, the two halves need ~300px of log line plus ~200px of
+	   counters: on a 390px phone the counters were pushed half off the right
+	   edge, so `records`, `bytes` and the rest read as cut-off digits. Stack
+	   them -- log above, counters below -- and let the counters wrap into rows
+	   instead of one tall column. */
+	@media (max-width: 820px) {
+		.fh {
+			grid-template-columns: 1fr;
+			/* minmax(0,1fr) not 1fr: the stream is a fixed-height overflow
+			   container, and an auto-minimum track would size to its content
+			   and push the counters off screen. */
+			grid-template-rows: minmax(0, 1fr) auto;
+			gap: 16px;
+			padding: 16px max(16px, env(safe-area-inset-right)) calc(16px + env(safe-area-inset-bottom))
+				max(16px, env(safe-area-inset-left));
+		}
+		.ln {
+			grid-template-columns: 50px minmax(0, 1fr) minmax(0, 76px) 52px;
+			gap: 7px;
+			font-size: 9.5px;
+		}
+		.k { overflow: hidden; text-overflow: ellipsis; }
+		.read { text-align: left; }
+		.phase { margin-bottom: 10px; }
+		dl { flex-direction: row; flex-wrap: wrap; gap: 8px 20px; }
+		dl > div { grid-template-columns: auto auto; gap: 7px; }
+		dd { font-size: 17px; }
+	}
 </style>

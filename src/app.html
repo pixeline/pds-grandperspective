@@ -2,7 +2,14 @@
 <html lang="en">
 	<head>
 		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<!-- viewport-fit=cover so the full-bleed surfaces (the rail drawer, the
+		     map's info strip) reach the physical edges on a notched phone; every
+		     one of them pads itself back with env(safe-area-inset-*). Without
+		     `cover` iOS letterboxes the page and the app looks inset for no
+		     stated reason. No maximum-scale/user-scalable=no: pinch-zoom is the
+		     only way to read an 11px mono label on a phone, and taking it away
+		     is an accessibility failure, not a polish step. -->
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 		<meta name="text-scale" content="scale" />
 
 		<!-- These live here, not in a component's <svelte:head>, because this app

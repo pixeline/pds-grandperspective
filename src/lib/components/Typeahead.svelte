@@ -111,7 +111,12 @@
 						class:on={i === active}
 						role="option"
 						aria-selected={i === active}
-						onmousedown={(e) => {
+						onpointerdown={(e) => {
+							// pointerdown rather than mousedown: it covers touch and pen
+							// too, and preventing it suppresses the compatibility
+							// mousedown, which is what keeps the input from blurring and
+							// letting the 120ms blur timer close this list out from under
+							// the tap before `choose` runs.
 							e.preventDefault();
 							choose(a);
 						}}
@@ -225,5 +230,23 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	@media (max-width: 820px) {
+		/* A 34px row of eight results is a lottery with a fingertip. */
+		li button {
+			min-height: 48px;
+			padding: 8px 10px;
+		}
+		img,
+		.noav {
+			width: 26px;
+			height: 26px;
+		}
+		.who b { font-size: 13px; }
+		.who i { font-size: 11px; }
+		/* The on-screen keyboard takes roughly half the screen while this list
+		   is open, and 296px of it would be behind the keyboard. */
+		ul { max-height: 45vh; }
 	}
 </style>

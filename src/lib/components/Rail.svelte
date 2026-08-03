@@ -22,10 +22,17 @@
 		autoHidden = null,
 		hueOf,
 		session = null,
+		// Narrow viewports only: below the breakpoint at the bottom of this
+		// file the rail stops being a column of the layout and becomes an
+		// overlay drawer, because a phone cannot afford to give it a third of
+		// the screen -- see the note on the media query. `open` is ignored at
+		// desktop widths, where the rail is always present.
+		open = false,
 		ondraw,
 		onstop,
 		onsignin,
-		onsignout
+		onsignout,
+		onclose
 	} = $props();
 
 	const isoDay = (ms) => (ms == null ? '' : new Date(ms).toISOString().slice(0, 10));
@@ -91,8 +98,14 @@
 	onDestroy(() => clearTimeout(queryTimer ?? undefined));
 </script>
 
-<aside class="rail">
-	<h1>GrandPerspective<small>PDS EDITION</small></h1>
+<aside id="rail" class="rail" class:open>
+	<div class="head">
+		<h1>GrandPerspective<small>PDS EDITION</small></h1>
+		<!-- Only reachable when the rail is a drawer; hidden by CSS above the
+		     breakpoint, where the rail is a permanent column with nothing to
+		     close. -->
+		<button class="shut" onclick={() => onclose?.()} aria-label="Close controls">close</button>
+	</div>
 
 	<div class="grp">
 		<span class="lbl">Repository</span>
@@ -133,7 +146,7 @@
 			value={queryInput}
 			oninput={onQueryInput}
 		/>
-		<div class="row">
+		<div class="row dates">
 			<label class="dt">
 				<span>from</span>
 				<div class="dtrow">
@@ -302,6 +315,8 @@
 		flex-direction: column;
 		gap: 20px;
 	}
+	.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+	.shut { display: none; }
 	h1 { font-size: 15px; font-weight: 800; letter-spacing: -0.03em; text-transform: uppercase; margin: 0; line-height: 1.05; }
 	h1 small { display: block; font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--ink-soft); margin-top: 5px; }
 	.grp { display: flex; flex-direction: column; gap: 8px; }
@@ -424,4 +439,69 @@
 	hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
 	.note { font-size: 10px; line-height: 1.45; color: var(--ink-soft); margin: 0; }
 	.note.warn { color: var(--ink); border-left: 2px solid var(--ink); padding-left: 8px; }
+
+	/* Below this width the rail is an overlay drawer, not a column.
+	   The alternative -- stacking rail above map -- measured 605px of rail to
+	   239px of map on a 390x844 phone. At that size buildTreemap resolves
+	   almost nothing into individual cells and reports most of the repo as
+	   `aggregated` blocks, so the map stops supporting its only claim, that
+	   area is proportional to stored size. The map gets the viewport; the
+	   controls come over the top of it on demand.
+
+	   `display: none` when closed rather than a translate: an off-screen
+	   transformed panel stays in the tab order and in the accessibility tree,
+	   so a keyboard or screen-reader user would walk 195 legend buttons they
+	   cannot see. And no slide transition -- constraint 5 prohibits decorative
+	   motion, and a drawer that simply is where it is loses nothing. */
+	@media (max-width: 820px) {
+		.rail {
+			display: none;
+			position: fixed;
+			/* under RecordModal's scrim (20) and dialog (21): a record opened
+			   from the map must never be covered by the controls that are
+			   behind it, and that modal carries the delete button. */
+			z-index: 15;
+			top: 0;
+			bottom: 0;
+			left: 0;
+			width: min(340px, 88vw);
+			max-width: 100%;
+			/* the drawer's own scroll must not chain to the page behind it */
+			overscroll-behavior: contain;
+			border-right: 1px solid var(--ink);
+			padding: 16px max(16px, env(safe-area-inset-right)) calc(32px + env(safe-area-inset-bottom))
+				max(16px, env(safe-area-inset-left));
+		}
+		.rail.open { display: flex; }
+		.shut {
+			display: block;
+			flex: none;
+			background: transparent;
+			color: var(--ink);
+			border: 1px solid var(--rule);
+			min-height: 44px;
+			padding: 0 12px;
+		}
+		/* 44px is the smallest reliably tappable target. The desktop rail is
+		   built at 30px, which is a miss-prone control on glass. */
+		.row button,
+		.txt,
+		.dtrow input {
+			min-height: 44px;
+		}
+		/* Measured: a native date control rendering `dd/mm/yyyy` plus its picker
+		   glyph needs 160px at the 16px minimum font size that keeps iOS from
+		   zooming, so two of them plus the gap want 326px inside 308px of drawer
+		   and the `to` field loses its right edge. They stack. */
+		.dates { flex-direction: column; }
+		.clr { width: 34px; }
+		/* the legend is the densest thing here: ~195 rows on a large repo, each
+		   a toggle plus an "only". Give both real height without turning the
+		   list into a scroll marathon. */
+		.leg-main { padding: 7px 0; }
+		.leg-main span { font-size: 11px; }
+		.only { padding: 8px 6px; font-size: 9.5px; }
+		table { font-size: 11.5px; }
+		.e { font-size: 11px; }
+	}
 </style>

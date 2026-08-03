@@ -460,7 +460,10 @@
 		top: 50%;
 		transform: translate(-50%, -50%);
 		width: min(760px, calc(100vw - 48px));
-		max-height: calc(100vh - 64px);
+		/* dvh: on a phone `100vh` is the large viewport, the one that pretends
+		   the URL bar is hidden, so the sheet was taller than what is actually
+		   on screen. */
+		max-height: calc(100dvh - 64px);
 		display: flex;
 		flex-direction: column;
 		gap: 14px;
@@ -486,8 +489,17 @@
 	.skew dd { font-weight: 500; }
 	pre, textarea {
 		margin: 0;
-		flex: 1;
-		min-height: 220px;
+		/* 220px is what this pane WANTS, not a floor it holds against the
+		   modal's max-height. As `min-height` it could not shrink, so on any
+		   viewport shorter than about 470px -- a phone in landscape, a short
+		   desktop window -- the sheet grew past `max-height` and pushed the
+		   footer, which carries Save and Confirm delete, off the bottom of the
+		   screen with nothing scrollable to reach it. Measured at 844x390: the
+		   footer's bottom edge landed at 405px. As a flex basis with
+		   `min-height: 0` it grows into spare room and yields when there is
+		   none, at every size, with no breakpoint involved. */
+		flex: 1 1 220px;
+		min-height: 0;
 		overflow: auto;
 		font-family: 'IBM Plex Mono', monospace;
 		font-size: 11px;
@@ -522,4 +534,27 @@
 	button.danger { background: var(--paper); color: var(--ink); border-width: 2px; }
 	button:disabled { opacity: 0.35; cursor: default; }
 	.x { background: transparent; color: var(--ink-soft); border: 0; padding: 4px; }
+
+	@media (max-width: 820px) {
+		/* A full sheet, not a centred card. `calc(100vw - 48px)` leaves 342px on
+		   a 390px phone for a record whose JSON is the point of opening it, and
+		   `100vh` on iOS means the large viewport, so the footer -- which holds
+		   Save, Confirm delete and Keep -- sat under the URL bar with nothing
+		   scrollable to reach it. */
+		.modal {
+			left: 0;
+			right: 0;
+			top: 0;
+			bottom: 0;
+			transform: none;
+			width: 100%;
+			max-height: none;
+			gap: 12px;
+			padding: 14px max(14px, env(safe-area-inset-right)) calc(14px + env(safe-area-inset-bottom))
+				max(14px, env(safe-area-inset-left));
+			padding-top: max(14px, env(safe-area-inset-top));
+		}
+		footer button { min-height: 44px; }
+		.x { min-height: 44px; padding: 4px 10px; }
+	}
 </style>

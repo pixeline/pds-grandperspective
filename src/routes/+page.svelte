@@ -39,6 +39,12 @@
   /** @type {import('$lib/repo/types.js').ModalRecord | null} */
   let selected = $state(null);
   let entered = $state(false);
+  // Narrow viewports only. Above the breakpoint in this file's <style> the rail
+  // is a permanent column and this is inert -- there is no state to keep in
+  // sync with the media query, because the media query alone decides whether
+  // the rail is a column or a drawer, and this only says whether the drawer is
+  // showing.
+  let railOpen = $state(false);
   // Keys (`col/rkey`) of records edited in this session, kept separate from
   // `data.exact`/`data.source` -- see the stats derivation below for why.
   let editedKeys = $state(new Set());
@@ -175,6 +181,10 @@
 
     busy = true;
     entered = true;
+    // On a phone the Read button lives inside the drawer, which covers the
+    // stage it is about to fill: leaving it open would hide the firehose the
+    // press just started. Inert at desktop widths.
+    railOpen = false;
     error = null;
     hover = null;
     selected = null;
@@ -403,6 +413,28 @@
 
 <div class="app" class:entry={!entered}>
   {#if entered}
+    <!-- Below 820px the rail is an overlay drawer (see Rail.svelte's media
+         query for why), so these two exist only there: a way in, and a way
+         out by tapping the map. Both are display:none above the breakpoint,
+         where the rail is a permanent column. -->
+    {#if !railOpen}
+      <button
+        class="railtoggle"
+        onclick={() => (railOpen = true)}
+        aria-expanded={railOpen}
+        aria-controls="rail">controls</button
+      >
+    {:else}
+      <div
+        class="railscrim"
+        role="button"
+        tabindex="-1"
+        aria-label="Close controls"
+        onclick={() => (railOpen = false)}
+        onkeydown={(e) => e.key === "Enter" && (railOpen = false)}
+      ></div>
+    {/if}
+
     <Rail
       bind:handle
       bind:filters
@@ -414,10 +446,12 @@
       autoHidden={autoHiddenNotice}
       hueOf={hues?.hueOf}
       {session}
+      open={railOpen}
       ondraw={draw}
       onstop={() => ac?.abort()}
       onsignin={onSignIn}
       onsignout={() => session.signOut()}
+      onclose={() => (railOpen = false)}
     />
   {/if}
 
@@ -478,6 +512,15 @@
   }
   .app.entry {
     grid-template-columns: 1fr;
+    /* One full-height row, stated explicitly rather than left implicit. The
+       narrow-viewport rule at the bottom of this block sets `auto 1fr` for the
+       ENTERED layout (rail stacked above stage), and `.app.entry` only
+       out-specifies it on columns -- so the rows track reached the entry
+       screen too. There the grid has a single child, `main.stage`, which lands
+       in the `auto` row; its only child is the gate, `position: absolute`, so
+       it contributes no in-flow height and the row collapsed to 0. With
+       `body { overflow: hidden }` that is a blank screen on any phone. */
+    grid-template-rows: 1fr;
   }
   .stage {
     position: relative;
@@ -520,10 +563,51 @@
     background: var(--ground-deep);
     padding: 1px 4px;
   }
+  .railtoggle,
+  .railscrim {
+    display: none;
+  }
+
   @media (max-width: 820px) {
-    .app {
+    /* One cell, always. The rail leaves the grid entirely at this width --
+       Rail.svelte makes it `position: fixed` -- so there is no second track to
+       size, and the stage gets the whole viewport. `.app.entry` is included by
+       name because it out-specifies a bare `.app` here, and leaving it out is
+       exactly the bug that made this screen blank on every phone: the entry
+       screen inherited an `auto 1fr` rows track it had no second child for,
+       collapsed the stage to 0, and the absolutely-positioned gate inside it
+       had nothing to be 100% of. */
+    .app,
+    .app.entry {
       grid-template-columns: 1fr;
-      grid-template-rows: auto 1fr;
+      grid-template-rows: 1fr;
+    }
+    .railtoggle {
+      display: block;
+      position: fixed;
+      top: max(12px, env(safe-area-inset-top));
+      left: max(12px, env(safe-area-inset-left));
+      /* under the drawer (15) and the record modal (20/21) */
+      z-index: 13;
+      min-height: 44px;
+      padding: 0 14px;
+      font-family: "Archivo", sans-serif;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      border: 1px solid var(--ink);
+      background: var(--paper);
+      color: var(--ink);
+      cursor: pointer;
+    }
+    .railscrim {
+      display: block;
+      position: fixed;
+      inset: 0;
+      z-index: 14;
+      background: color-mix(in srgb, var(--ink) 32%, transparent);
+      border: 0;
     }
   }
 </style>

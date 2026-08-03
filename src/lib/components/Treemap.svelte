@@ -188,7 +188,24 @@
 
 	function at(ev) {
 		const r = canvas.getBoundingClientRect();
+		// The exact point, never a nearest-cell search within some slop radius.
+		// Cells on a phone are routinely under a finger's width, so a fuzzy hit
+		// would resolve to a neighbouring record -- and the modal this opens
+		// carries a delete button. Missing and getting nothing is recoverable;
+		// hitting confidently and getting the wrong record is not.
 		return hitTest(index, ev.clientX - r.left, ev.clientY - r.top);
+	}
+
+	/**
+	 * Hover is a pointing-device idea. A touch has no hover state: iOS
+	 * synthesises a mousemove at the tap point just before the click, so with
+	 * mouse handlers the tooltip flashed up and was immediately buried by the
+	 * record modal the same tap opened. Tapping goes straight to the record --
+	 * which is the tooltip's content and more.
+	 */
+	function onpointermove(ev) {
+		if (ev.pointerType === 'touch') return;
+		onhover?.(at(ev));
 	}
 
 	function onfocus() {
@@ -240,8 +257,8 @@
 	<canvas
 		bind:this={canvas}
 		tabindex="0"
-		onmousemove={(e) => onhover?.(at(e))}
-		onmouseleave={() => onhover?.(null)}
+		{onpointermove}
+		onpointerleave={() => onhover?.(null)}
 		onclick={(e) => {
 			const hit = at(e);
 			if (hit) onopen?.(hit);
@@ -288,6 +305,11 @@
 	canvas {
 		display: block;
 		cursor: pointer;
+		/* Drop the ~300ms wait-for-a-second-tap before a tap becomes a click,
+		   which on a map you explore by tapping reads as the app being stuck.
+		   `manipulation` keeps pinch-zoom, which is the only way to read an
+		   11px mono cell label on a phone. */
+		touch-action: manipulation;
 	}
 	.sr-only {
 		position: absolute;
@@ -344,5 +366,30 @@
 		color: var(--ink);
 		border-left: 2px solid var(--ink);
 		padding-left: 6px;
+	}
+
+	@media (max-width: 820px) {
+		/* The desktop strip is a floating label with `max-width: calc(100% -
+		   220px)` to clear the tooltip. On a 390px phone that leaves 170px, so
+		   the sentence stacks into a tall narrow column over the map. A phone
+		   has no tooltip to clear (see the pointerType guard above), so the
+		   strip spans the width and sits flush to the bottom edge instead. */
+		.info {
+			left: 0;
+			right: 0;
+			bottom: 0;
+			max-width: none;
+			border-left: 0;
+			border-right: 0;
+			border-bottom: 0;
+			gap: 6px 10px;
+			padding: 7px 12px calc(7px + env(safe-area-inset-bottom));
+			padding-left: max(12px, env(safe-area-inset-left));
+			padding-right: max(12px, env(safe-area-inset-right));
+		}
+		.wt {
+			min-height: 36px;
+			padding: 2px 10px;
+		}
 	}
 </style>
