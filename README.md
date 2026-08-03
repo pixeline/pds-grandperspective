@@ -25,8 +25,15 @@ fully client-to-PDS tool — accepted for icon coverage, not an oversight.
 
     npm install
     npm run dev      # binds 127.0.0.1 — required for the OAuth loopback client
+    npm run dev:mobile  # binds 0.0.0.0 for phone/tablet testing on your LAN
     npm test
     npm run build
+
+For a real phone or tablet, `http://127.0.0.1:5174/` points at the device
+itself, not your Mac, and this repo's default Vite config only listens on the
+Mac's loopback interface anyway. Use `npm run dev:mobile`, then open the Mac's
+LAN IP from the device instead. Read-only flows can be tested that way; the
+OAuth loopback sign-in path remains a local-desktop constraint by design.
 
 ## Credits
 
