@@ -88,7 +88,13 @@
 
 	<div class="grp">
 		<span class="lbl">Repository</span>
-		<Typeahead bind:value={handle} onsubmit={(h) => ondraw(h)} />
+		<!-- a sign-in error describes a past attempt; editing the handle makes it
+		     stale, so drop it as soon as the user starts typing again -->
+		<Typeahead
+			bind:value={handle}
+			onsubmit={(h) => ondraw(h)}
+			oninput={() => session?.clearError?.()}
+		/>
 		<div class="row">
 			<button onclick={() => (busy ? onstop() : ondraw())}>{busy ? 'Stop' : 'Read'}</button>
 			{#if session?.did}

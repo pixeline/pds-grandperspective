@@ -196,12 +196,25 @@ export function buildTreemap(records, { w, h, weigh, hueOf }) {
 			items.sort((a, b) => b.n - a.n);
 			const rects = [];
 			squarify(items, 0, 0, L.w, L.h, rects);
-			// Decide resolvability from the rectangles squarify actually
-			// produced, not the uniform-grid estimate above -- a skewed
-			// byte distribution can put a real record below the pixel floor
-			// even when the block-level average looked fine.
-			const minSide = rects.reduce((m, r) => Math.min(m, r.w, r.h), Infinity);
-			if (rects.length === n && minSide >= 2.5) cellRects = rects;
+			// Decide resolvability from a *representative* cell size, not the
+			// smallest rect squarify actually produced. In a collection of a
+			// few thousand records, byte sizes vary enough that there is
+			// almost always one very small record -- testing the minimum
+			// meant that one outlier condemned the entire block to aggregate,
+			// even though the other several thousand cells would have
+			// resolved fine (this was the regression: app.bsky.feed.post,
+			// 4,119 records, collapsed to a single flat block). The
+			// representative measure is the side a uniform cell would have
+			// had for this block -- sqrt(blockArea / n) -- which is exactly
+			// what cw/ch above already estimate, so this restores the old
+			// threshold behaviour while keeping byte-proportional rects. (A
+			// median side would be equally defensible; minimum is simply the
+			// wrong statistic.) Individual sub-pixel records inside an
+			// otherwise resolvable block are still drawn below, clamped to
+			// >= 1px -- that is honest: those records really are tiny, and
+			// hiding thousands of clickable records for one small one is not.
+			const representativeSide = Math.sqrt((L.w * L.h) / n);
+			if (rects.length === n && representativeSide >= 2.5) cellRects = rects;
 		}
 
 		if (cellRects) {

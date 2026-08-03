@@ -81,6 +81,13 @@ export function createSessionStore() {
 		get agent() { return agent; },
 		get error() { return error; },
 
+		// The sign-in error describes a past attempt, not the current input --
+		// once the user starts editing the handle again, the message is stale
+		// and should not linger. Called from Rail.svelte on handle change.
+		clearError() {
+			error = null;
+		},
+
 		async init() {
 			error = null;
 			try {

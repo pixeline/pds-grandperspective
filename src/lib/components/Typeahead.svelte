@@ -4,6 +4,8 @@
 	let {
 		value = $bindable(''),
 		onsubmit,
+		/** fires on every keystroke, so a caller can drop state that the edit makes stale */
+		oninput,
 		placeholder = 'handle or DID',
 		big = false,
 		autofocus = false
@@ -91,7 +93,10 @@
 		role="combobox"
 		aria-expanded={open}
 		aria-controls="ta-list"
-		oninput={(e) => query(e.currentTarget.value)}
+		oninput={(e) => {
+			query(e.currentTarget.value);
+			oninput?.(e.currentTarget.value);
+		}}
 		onkeydown={key}
 		onblur={() => setTimeout(() => (open = false), 120)}
 		onfocus={() => results.length && (open = true)}

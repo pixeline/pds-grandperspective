@@ -140,21 +140,45 @@ describe('buildTreemap', () => {
 		expect(big.pitchW * big.pitchH).toBeCloseTo(small.pitchW * small.pitchH, 0);
 	});
 
-	// Aggregation must still trigger from actual geometry once cells are
-	// variable-sized, not only from the old uniform cw/ch estimate -- a
-	// severely skewed byte distribution can leave the tiny record's cell
-	// below the pixel floor even when the block's average cell looked fine.
-	it('aggregates the whole block when a skewed byte distribution leaves any cell under the pixel floor', () => {
+	// Regression: aggregation must be decided from a *representative* cell
+	// size (sqrt(blockArea / n)), not the single smallest rect squarify
+	// produced. At real-world scale (a few thousand records) there is almost
+	// always one record far smaller than the rest, and testing the minimum
+	// meant that one outlier condemned the whole block -- which is exactly
+	// what made app.bsky.feed.post (4,119 records) collapse to one flat
+	// block. A block this size, with one record 1000x smaller than the
+	// median, must still resolve to per-record cells.
+	it('resolves per-record cells even when one record among many is 1000x smaller than the median', () => {
 		const records = [
-			{ col: 'a.b.c', ts: 1, rkey: 'huge', bytes: 999999, errs: 0, errNames: [] },
-			...Array.from({ length: 40 }, (_, i) => ({
-				col: 'a.b.c', ts: i + 2, rkey: `tiny-${i}`, bytes: 1, errs: 0, errNames: []
+			{ col: 'a.b.c', ts: 1, rkey: 'tiny', bytes: 1, errs: 0, errNames: [] },
+			...Array.from({ length: 499 }, (_, i) => ({
+				col: 'a.b.c', ts: i + 2, rkey: `mid-${i}`, bytes: 1000, errs: 0, errNames: []
 			}))
 		];
 		const { hueOf } = collectionHues(records);
-		const { blocks } = buildTreemap(records, { w: 120, h: 120, weigh: 'bytes', hueOf });
+		const { blocks } = buildTreemap(records, { w: 400, h: 400, weigh: 'bytes', hueOf });
+		const block = blocks.find((b) => b.nsid === 'a.b.c');
+		expect(block.aggregate).toBe(false);
+		expect(block.cells.length).toBe(500);
+	});
+
+	// The threshold must not simply be disabled by the fix above: a block
+	// whose records are *uniformly* too small to resolve (every cell, not
+	// just an outlier, falls under the pixel floor) must still aggregate.
+	it('still aggregates a block whose records are uniformly too small to resolve', () => {
+		const records = Array.from({ length: 500 }, (_, i) => ({
+			col: 'a.b.c', ts: i + 1, rkey: `r-${i}`, bytes: 100, errs: 0, errNames: []
+		}));
+		const { hueOf } = collectionHues(records);
+		const { blocks, aggregated } = buildTreemap(records, {
+			w: 30,
+			h: 30,
+			weigh: 'bytes',
+			hueOf
+		});
 		const block = blocks.find((b) => b.nsid === 'a.b.c');
 		expect(block.aggregate).toBe(true);
 		expect(block.cells.length).toBe(0);
+		expect(aggregated).toBeGreaterThan(0);
 	});
 });
