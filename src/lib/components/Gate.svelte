@@ -16,7 +16,7 @@
 <div class="gate">
   <div class="gate-inner">
     <div>
-      <img src="/favicon.svg" width="200" alt="GrandPerspective Logo" />
+      <img src="./favicon.svg" width="200" alt="GrandPerspective Logo" />
     </div>
 
     <h1>GrandPerspective<small>PDS EDITION</small></h1>
