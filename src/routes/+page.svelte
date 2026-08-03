@@ -399,16 +399,6 @@
     name="description"
     content="See where an atproto repository's bytes actually go, and act on what you find."
   />
-  <script
-    src="https://cdn.counter.dev/script.js"
-    data-id="d4da7416-0a1c-481d-a49e-dab45f63aa2e"
-    data-utcoffset="1"
-  ></script>
-  <script
-    src="https://analytics.ahrefs.com/analytics.js"
-    data-key="VwAkBLSYZQ9QJfQxWkslWA"
-    async
-  ></script>
 </svelte:head>
 
 <div class="app" class:entry={!entered}>
