@@ -13,7 +13,8 @@
 
 	/** @type {{record: import('$lib/repo/types.js').ModalRecord | null, did: string | null,
 	 *          handle: string | null, agent: any, canWrite: boolean, isOwnRepo: boolean,
-	 *          onclose?: () => void, onchanged?: (e: {action: 'updated'|'deleted', record: any, value?: any}) => void}} */
+	 *          onclose?: () => void, onchanged?: (e: {action: 'updated'|'deleted', record: any, value?: any}) => void,
+	 *          microblogging?: string}} */
 	let {
 		record = null,
 		did = null,
@@ -22,7 +23,8 @@
 		canWrite = false,
 		isOwnRepo = false,
 		onclose,
-		onchanged
+		onchanged,
+		microblogging = $bindable('bsky')
 	} = $props();
 
 	let editing = $state(false);
@@ -254,6 +256,14 @@
 		a.remove();
 	}
 
+	// Mapping of microblogging preference IDs to domain and display info
+	const MICROBLOGGING_MAP = {
+		'bsky': { domain: 'bsky.app', label: 'Bluesky' },
+		'mu.social': { domain: 'mu.social', label: 'Mu' },
+		'blacksky': { domain: 'blacksky.app', label: 'Blacksky' },
+		'northsky': { domain: 'northsky.social', label: 'Northsky' }
+	};
+
 	// The app that owns this record's lexicon, and the best URL to open on it
 	// (deep link for the four documented Bluesky shapes, domain root
 	// otherwise) -- or, when the record's value carries a `subject.uri` (a
@@ -261,15 +271,32 @@
 	// from THAT subject instead, so the button opens what the record is
 	// about rather than a home page.
 	//
+	// If a microblogging preference is set and the record's collection is a
+	// Bluesky collection (app.bsky.*), override the domain with the preferred
+	// microblogging app.
+	//
 	// An aggregate block has no single record behind it, so this button is
 	// dropped entirely rather than shown pointing at a domain root -- for a
 	// collection like app.bsky.feed.like that would be "Open on bsky.app"
 	// landing on a home feed, which is not what "open on the app" promises
 	// for a whole collection. `null` here (not "compute it anyway with no
 	// rkey/value") is what makes the button vanish below.
-	const appLink = $derived(
-		record && !record.aggregate ? appLinkFor(record.col, did, record.rkey, record.value) : null
-	);
+	const appLink = $derived.by(() => {
+		const base = record && !record.aggregate ? appLinkFor(record.col, did, record.rkey, record.value) : null;
+		if (!base) return null;
+		
+		// Override with preferred microblogging app if this is a Bluesky collection
+		const preferred = MICROBLOGGING_MAP[microblogging];
+		if (preferred && base.col?.startsWith('app.bsky.')) {
+			return {
+				...base,
+				domain: preferred.domain,
+				label: preferred.label,
+				url: base.url.replace('bsky.app', preferred.domain)
+			};
+		}
+		return base;
+	});
 
 	/** @param {string} domain */
 	function iconSourcesFor(domain) {
@@ -417,7 +444,7 @@
 					     above stays the "show me this exact record" affordance.
 					     Say so, rather than just naming the domain, which reads as
 					     "open the record" and surprises when it isn't. -->
-					{appLink.subject ? `Open linked record on ${appLink.domain}` : `Open on ${appLink.domain}`}
+					{appLink.subject ? `Open linked record on ${appLink.label || appLink.domain}` : `Open on ${appLink.label || appLink.domain}`}
 				</button>
 			{/if}
 

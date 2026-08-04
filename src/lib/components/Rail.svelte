@@ -303,9 +303,7 @@
 	</div>
 
 	<hr />
-	{#if session?.did}
-		<Preferences session={session} />
-	{/if}
+	<Preferences />
 	<Footer />
 </aside>
 

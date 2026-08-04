@@ -1,60 +1,40 @@
 <script>
-	import { MICROBLOGGING_OPTS, VIEWER_OPTS, PREFERENCES_COLLECTION, PREFERENCES_RKEY, createPreferences, readPreferences } from '$lib/preferences.js';
-	import { putRecord } from '$lib/atproto/write.js';
+	import { MICROBLOGGING_OPTS, VIEWER_OPTS, createPreferences } from '$lib/preferences.js';
 
-	let { session } = $props();
+	// Storage key for localStorage
+	const STORAGE_KEY = 'pds-grandperspective-preferences';
 
+	// Initialize from localStorage
 	let microblogging = $state('bsky');
 	let viewer = $state('pdsls.dev');
-	let saving = $state(false);
-	let saveError = $state(null);
 	let saved = $state(false);
-	let loading = $state(false);
 
-	// Load existing preferences if available
-	$effect(() => {
-		if (!session.did || !session.agent) return;
-		
-		async function load() {
-			loading = true;
-			try {
-				const prefs = await readPreferences(session.agent, session.did);
-				if (prefs) {
-					microblogging = prefs.microblogging;
-					viewer = prefs.viewer;
-				}
-			} catch (/** @type {any} */ err) {
-				// Silently ignore - will use defaults
-			} finally {
-				loading = false;
+	// Load preferences from localStorage on mount
+	function loadPreferences() {
+		try {
+			const stored = localStorage.getItem(STORAGE_KEY);
+			if (stored) {
+				const prefs = JSON.parse(stored);
+				if (prefs.microblogging) microblogging = prefs.microblogging;
+				if (prefs.viewer) viewer = prefs.viewer;
 			}
+		} catch (/** @type {any} */ err) {
+			// Silently ignore - will use defaults
 		}
-		load();
-	});
+	}
+
+	// Load on component mount
+	loadPreferences();
 
 	async function save() {
-		if (!session.did || !session.agent) {
-			saveError = 'Please sign in to save preferences';
-			return;
-		}
-
-		saving = true;
-		saveError = null;
-
+		saved = false;
 		try {
 			const prefs = createPreferences(microblogging, viewer);
-			await putRecord(session, {
-				did: session.did,
-				col: PREFERENCES_COLLECTION,
-				rkey: PREFERENCES_RKEY,
-				value: prefs
-			});
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
 		} catch (/** @type {any} */ err) {
-			saveError = String(err?.message ?? err);
-		} finally {
-			saving = false;
+			// Silently ignore save errors
 		}
 	}
 </script>
@@ -64,7 +44,7 @@
 
 	<div class="section">
 		<label class="lbl">Microblogging App</label>
-		<select bind:value={microblogging} disabled={saving}>
+		<select bind:value={microblogging}>
 			{#each MICROBLOGGING_OPTS as opt (opt.id)}
 				<option value={opt.id}>{opt.label}</option>
 			{/each}
@@ -74,7 +54,7 @@
 
 	<div class="section">
 		<label class="lbl">Record Viewer</label>
-		<select bind:value={viewer} disabled={saving}>
+		<select bind:value={viewer}>
 			{#each VIEWER_OPTS as opt (opt.id)}
 				<option value={opt.id}>{opt.label}</option>
 			{/each}
@@ -82,25 +62,14 @@
 		<span class="hint">Choose your preferred record viewer</span>
 	</div>
 
-	{#if session.did}
-		{#if loading}
-			<span class="loading">Loading preferences...</span>
-		{:else}
-			<div class="actions">
-				<button onclick={save} disabled={saving}>
-					{saving ? 'Saving...' : 'Save Preferences'}
-				</button>
-				{#if saved}
-					<span class="saved">Saved!</span>
-				{/if}
-				{#if saveError}
-					<span class="error">{saveError}</span>
-				{/if}
-			</div>
+	<div class="actions">
+		<button onclick={save}>
+			Save Preferences
+		</button>
+		{#if saved}
+			<span class="saved">Saved!</span>
 		{/if}
-	{:else}
-		<p class="signin-prompt">Sign in to save your preferences.</p>
-	{/if}
+	</div>
 </div>
 
 <style>

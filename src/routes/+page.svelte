@@ -22,6 +22,7 @@
   let handle = $state("");
   let weigh = $state("bytes");
   let filters = $state({ hidden: new Set(), from: null, to: null, query: "" });
+  let microblogging = $state("bsky");
 
   // Critical 1 survived three review rounds partly because these were
   // `$state(null)` with no annotation: TypeScript infers `null`, narrows
@@ -51,6 +52,19 @@
   // Keys (`col/rkey`) of records edited in this session, kept separate from
   // `data.exact`/`data.source` -- see the stats derivation below for why.
   let editedKeys = $state(new Set());
+
+  // Load microblogging preference from localStorage
+  $effect(() => {
+    try {
+      const stored = localStorage.getItem('pds-grandperspective-preferences');
+      if (stored) {
+        const prefs = JSON.parse(stored);
+        if (prefs.microblogging) microblogging = prefs.microblogging;
+      }
+    } catch {
+      // Silently ignore - will use default
+    }
+  });
   // Session-scoped dismiss for the slow-network warning banner. The page owns
   // dismissed state so the same WifiWarning instance handles one read's banner;
   // a fresh read on a slow network shows it again only after a page reload.
@@ -507,6 +521,7 @@
   agent={session.agent}
   canWrite={session.canWrite}
   {isOwnRepo}
+  microblogging={microblogging}
   onclose={() => (selected = null)}
   {onchanged}
 />
