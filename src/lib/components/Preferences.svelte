@@ -1,36 +1,29 @@
 <script>
-	import { MICROBLOGGING_OPTS, VIEWER_OPTS, createPreferences } from '$lib/preferences.js';
-
-	// Storage key for localStorage
-	const STORAGE_KEY = 'pds-grandperspective-preferences';
+	import { onMount } from 'svelte';
+	import {
+		MICROBLOGGING_OPTS,
+		VIEWER_OPTS,
+		loadPreferences,
+		savePreferences
+	} from '$lib/preferences.js';
 
 	// Initialize from localStorage
 	let microblogging = $state('bsky');
 	let viewer = $state('pdsls.dev');
 	let saved = $state(false);
 
-	// Load preferences from localStorage on mount
-	function loadPreferences() {
-		try {
-			const stored = localStorage.getItem(STORAGE_KEY);
-			if (stored) {
-				const prefs = JSON.parse(stored);
-				if (prefs.microblogging) microblogging = prefs.microblogging;
-				if (prefs.viewer) viewer = prefs.viewer;
-			}
-		} catch (/** @type {any} */ err) {
-			// Silently ignore - will use defaults
-		}
-	}
-
-	// Load on component mount
-	loadPreferences();
+	onMount(() => {
+		const prefs = loadPreferences();
+		microblogging = prefs.microblogging;
+		viewer = prefs.viewer;
+	});
 
 	async function save() {
 		saved = false;
 		try {
-			const prefs = createPreferences(microblogging, viewer);
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(prefs));
+			const prefs = savePreferences({ microblogging, viewer });
+			microblogging = prefs.microblogging;
+			viewer = prefs.viewer;
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
 		} catch (/** @type {any} */ err) {
@@ -43,8 +36,8 @@
 	<h2>Preferences</h2>
 
 	<div class="section">
-		<label class="lbl">Microblogging App</label>
-		<select bind:value={microblogging}>
+		<label class="lbl" for="pref-microblogging">Microblogging App</label>
+		<select id="pref-microblogging" bind:value={microblogging}>
 			{#each MICROBLOGGING_OPTS as opt (opt.id)}
 				<option value={opt.id}>{opt.label}</option>
 			{/each}
@@ -53,8 +46,8 @@
 	</div>
 
 	<div class="section">
-		<label class="lbl">Record Viewer</label>
-		<select bind:value={viewer}>
+		<label class="lbl" for="pref-viewer">Record Viewer</label>
+		<select id="pref-viewer" bind:value={viewer}>
 			{#each VIEWER_OPTS as opt (opt.id)}
 				<option value={opt.id}>{opt.label}</option>
 			{/each}
@@ -168,22 +161,4 @@
 		font-size: 10px;
 	}
 
-	.preferences .error {
-		color: var(--ink);
-		font-size: 10px;
-		border-left: 2px solid var(--ink);
-		padding-left: 6px;
-	}
-
-	.preferences .signin-prompt {
-		font-size: 10px;
-		color: var(--ink-soft);
-		margin: 0;
-	}
-
-	.preferences .loading {
-		font-size: 10px;
-		color: var(--ink-soft);
-		font-style: italic;
-	}
 </style>

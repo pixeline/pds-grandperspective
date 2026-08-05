@@ -15,6 +15,7 @@
   import { selectDominantCollection } from "$lib/repo/dominance.js";
   import { defaultState, fromHash, toHash } from "$lib/repo/urlstate.js";
   import { getConnection } from "$lib/util/connection.js";
+  import { PREFERENCES_EVENT, STORAGE_KEY, loadPreferences } from "$lib/preferences.js";
 
   const session = createSessionStore();
 
@@ -25,6 +26,7 @@
   let weigh = $state("bytes");
   let filters = $state({ hidden: new Set(), from: null, to: null, query: "" });
   let microblogging = $state("bsky");
+  let viewer = $state("pdsls.dev");
 
   // Critical 1 survived three review rounds partly because these were
   // `$state(null)` with no annotation: TypeScript infers `null`, narrows
@@ -55,18 +57,11 @@
   // `data.exact`/`data.source` -- see the stats derivation below for why.
   let editedKeys = $state(new Set());
 
-  // Load microblogging preference from localStorage
-  $effect(() => {
-    try {
-      const stored = localStorage.getItem('pds-grandperspective-preferences');
-      if (stored) {
-        const prefs = JSON.parse(stored);
-        if (prefs.microblogging) microblogging = prefs.microblogging;
-      }
-    } catch {
-      // Silently ignore - will use default
-    }
-  });
+  function syncPreferences() {
+    const prefs = loadPreferences();
+    microblogging = prefs.microblogging;
+    viewer = prefs.viewer;
+  }
   // Session-scoped dismiss for the slow-network warning banner. The page owns
   // dismissed state so the same WifiWarning instance handles one read's banner;
   // a fresh read on a slow network shows it again only after a page reload.
@@ -382,46 +377,62 @@
     session.signIn(h);
   }
 
-  onMount(async () => {
-    // the OAuth callback arrives as ?code=…&state=… on this same route, so it
-    // MUST be resolved before the hash is read or the redirect races the
-    // state restore. session.init() never throws (failures land in
-    // session.error), so this always runs -- a failed restore must not
-    // skip the hash restore below, it just means session.did stays null.
-    await session.init();
+  onMount(() => {
+    syncPreferences();
 
-    const s = fromHash(location.hash);
-    handle = s.handle;
-    committedHandle = s.handle;
-    weigh = s.weigh;
-    filters = { hidden: s.hidden, from: s.from, to: s.to, query: s.query };
-    // A `hide=` already present in the URL that opened this page names
-    // exactly what the sharer chose to hide -- auto-hide must not add a
-    // collection on top of that, or a shared link would show its recipient
-    // something the sharer never saw. This is checked ONLY for the read
-    // `onMount` itself triggers below; every later read (Rail's Read
-    // button, Gate's pick) has no URL of its own to honour, so it gets a
-    // fresh one-shot auto-hide check regardless of this flag.
-    const suppressAutoHide = s.hidden.size > 0;
-    if (s.handle) {
-      // An explicit #h= always wins, even when signed in: a shared link to
-      // someone else's repo must not be hijacked into the signed-in user's
-      // own.
-      draw(null, { suppressAutoHide });
-    } else if (session.did) {
-      // Landing back here straight from the OAuth callback (no explicit
-      // handle in the URL): session.init() just established a real
-      // session, but nothing has been read yet, so the entry screen would
-      // otherwise show no sign of it -- reported as "went back to the
-      // home screen, seemingly unlogged". Go straight to reading the
-      // signed-in user's own repo instead. draw() flips `entered` (and
-      // `busy`) synchronously, before any awaiting happens, so the rail
-      // (which shows "signed in as <handle>") and the firehose reading
-      // state appear immediately rather than a blank entry screen
-      // appearing to hang through what can be a large read (~56 MB for
-      // the account this was reported against).
-      draw(session.handle ?? session.did, { suppressAutoHide });
-    }
+    const onPrefsChanged = () => syncPreferences();
+    const onStorage = (e) => {
+      if (e.key === null || e.key === STORAGE_KEY) syncPreferences();
+    };
+    window.addEventListener(PREFERENCES_EVENT, onPrefsChanged);
+    window.addEventListener("storage", onStorage);
+
+    (async () => {
+      // the OAuth callback arrives as ?code=…&state=… on this same route, so it
+      // MUST be resolved before the hash is read or the redirect races the
+      // state restore. session.init() never throws (failures land in
+      // session.error), so this always runs -- a failed restore must not
+      // skip the hash restore below, it just means session.did stays null.
+      await session.init();
+
+      const s = fromHash(location.hash);
+      handle = s.handle;
+      committedHandle = s.handle;
+      weigh = s.weigh;
+      filters = { hidden: s.hidden, from: s.from, to: s.to, query: s.query };
+      // A `hide=` already present in the URL that opened this page names
+      // exactly what the sharer chose to hide -- auto-hide must not add a
+      // collection on top of that, or a shared link would show its recipient
+      // something the sharer never saw. This is checked ONLY for the read
+      // `onMount` itself triggers below; every later read (Rail's Read
+      // button, Gate's pick) has no URL of its own to honour, so it gets a
+      // fresh one-shot auto-hide check regardless of this flag.
+      const suppressAutoHide = s.hidden.size > 0;
+      if (s.handle) {
+        // An explicit #h= always wins, even when signed in: a shared link to
+        // someone else's repo must not be hijacked into the signed-in user's
+        // own.
+        draw(null, { suppressAutoHide });
+      } else if (session.did) {
+        // Landing back here straight from the OAuth callback (no explicit
+        // handle in the URL): session.init() just established a real
+        // session, but nothing has been read yet, so the entry screen would
+        // otherwise show no sign of it -- reported as "went back to the
+        // home screen, seemingly unlogged". Go straight to reading the
+        // signed-in user's own repo instead. draw() flips `entered` (and
+        // `busy`) synchronously, before any awaiting happens, so the rail
+        // (which shows "signed in as <handle>") and the firehose reading
+        // state appear immediately rather than a blank entry screen
+        // appearing to hang through what can be a large read (~56 MB for
+        // the account this was reported against).
+        draw(session.handle ?? session.did, { suppressAutoHide });
+      }
+    })();
+
+    return () => {
+      window.removeEventListener(PREFERENCES_EVENT, onPrefsChanged);
+      window.removeEventListener("storage", onStorage);
+    };
   });
 </script>
 
@@ -527,6 +538,7 @@
   canWrite={session.canWrite}
   {isOwnRepo}
   microblogging={microblogging}
+  viewer={viewer}
   onclose={() => (selected = null)}
   {onchanged}
 />

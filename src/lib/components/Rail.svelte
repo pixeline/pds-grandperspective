@@ -138,6 +138,13 @@
 
 	<hr />
 
+	<details class="fold">
+		<summary class="fold-summary">Preferences</summary>
+		<Preferences />
+	</details>
+
+	<hr />
+
 	<div class="grp">
 		<span class="lbl">Filter</span>
 		<input
@@ -186,60 +193,62 @@
 
 	<hr />
 
-	<div class="grp">
-		<span class="lbl">Measured</span>
-		<table>
-			<tbody>
-				<tr><td class="k">status</td><td class="v">{status}</td></tr>
-				{#if stats}
-					<!-- Stated from the read result (stats.did/stats.handle), never
-					     from the handle input field above -- that field says what to
-					     read next, not what is on screen, and the two can silently
-					     disagree the moment it is edited without pressing Read. -->
-					<tr>
-						<td class="k">identity</td>
-						<td class="v idval" title={stats.handle ? null : stats.did}>
-							{stats.handle ?? stats.did}{#if stats.isOwn}
-								<b class="you">(you)</b>
-							{/if}
-						</td>
-					</tr>
-					{#if stats.handle}
+	<details class="fold">
+		<summary class="fold-summary">Measured</summary>
+		<div class="grp">
+			<table>
+				<tbody>
+					<tr><td class="k">status</td><td class="v">{status}</td></tr>
+					{#if stats}
+						<!-- Stated from the read result (stats.did/stats.handle), never
+						     from the handle input field above -- that field says what to
+						     read next, not what is on screen, and the two can silently
+						     disagree the moment it is edited without pressing Read. -->
 						<tr>
-							<td class="k">did</td>
-							<td class="v idval" title={stats.did}>{stats.did}</td>
+							<td class="k">identity</td>
+							<td class="v idval" title={stats.handle ? null : stats.did}>
+								{stats.handle ?? stats.did}{#if stats.isOwn}
+									<b class="you">(you)</b>
+								{/if}
+							</td>
 						</tr>
+						{#if stats.handle}
+							<tr>
+								<td class="k">did</td>
+								<td class="v idval" title={stats.did}>{stats.did}</td>
+							</tr>
+						{/if}
+						<tr><td class="k">pds</td><td class="v">{stats.pds}</td></tr>
+						<tr><td class="k">collections</td><td class="v">{stats.collections}</td></tr>
+						<tr><td class="k">records</td><td class="v">{fmtNum(stats.records)}</td></tr>
+						<tr><td class="k">stored size</td><td class="v">{fmtBytes(stats.bytes)}</td></tr>
+						<tr>
+							<td class="k">sizes</td>
+							<td class="v">
+								{stats.source === 'car' ? 'measured (CAR)' : 'estimated (listRecords)'}{#if stats.editedCount}
+									· {stats.editedCount} record{stats.editedCount > 1 ? 's' : ''} edited
+								{/if}
+							</td>
+						</tr>
+						{#if stats.rev}
+							<tr><td class="k">revision</td><td class="v">{stats.rev}</td></tr>
+						{/if}
+						<tr><td class="k">first record</td><td class="v">{stats.first}</td></tr>
+						{#if stats.undated}
+							<tr><td class="k">undated</td><td class="v">{stats.undated}</td></tr>
+						{/if}
+						<tr>
+							<td class="k">invalid</td>
+							<td class="v">{stats.invalid} ({stats.invalidPct}%)</td>
+						</tr>
+						{#if stats.matched !== stats.records}
+							<tr><td class="k">showing</td><td class="v">{fmtNum(stats.matched)}</td></tr>
+						{/if}
 					{/if}
-					<tr><td class="k">pds</td><td class="v">{stats.pds}</td></tr>
-					<tr><td class="k">collections</td><td class="v">{stats.collections}</td></tr>
-					<tr><td class="k">records</td><td class="v">{fmtNum(stats.records)}</td></tr>
-					<tr><td class="k">stored size</td><td class="v">{fmtBytes(stats.bytes)}</td></tr>
-					<tr>
-						<td class="k">sizes</td>
-						<td class="v">
-							{stats.source === 'car' ? 'measured (CAR)' : 'estimated (listRecords)'}{#if stats.editedCount}
-								· {stats.editedCount} record{stats.editedCount > 1 ? 's' : ''} edited
-							{/if}
-						</td>
-					</tr>
-					{#if stats.rev}
-						<tr><td class="k">revision</td><td class="v">{stats.rev}</td></tr>
-					{/if}
-					<tr><td class="k">first record</td><td class="v">{stats.first}</td></tr>
-					{#if stats.undated}
-						<tr><td class="k">undated</td><td class="v">{stats.undated}</td></tr>
-					{/if}
-					<tr>
-						<td class="k">invalid</td>
-						<td class="v">{stats.invalid} ({stats.invalidPct}%)</td>
-					</tr>
-					{#if stats.matched !== stats.records}
-						<tr><td class="k">showing</td><td class="v">{fmtNum(stats.matched)}</td></tr>
-					{/if}
-				{/if}
-			</tbody>
-		</table>
-	</div>
+				</tbody>
+			</table>
+		</div>
+	</details>
 
 	<div class="grp">
 		<div class="legend-head">
@@ -303,7 +312,6 @@
 	</div>
 
 	<hr />
-	<Preferences />
 	<Footer />
 </aside>
 
@@ -319,6 +327,24 @@
 	}
 	.head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 	.shut { display: none; }
+	.fold {
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+	}
+	.fold-summary {
+		font-family: 'Archivo', sans-serif;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		cursor: pointer;
+		color: var(--ink);
+		user-select: none;
+	}
+	.fold-summary::marker {
+		color: var(--ink-soft);
+	}
 	h1 { font-size: 15px; font-weight: 800; letter-spacing: -0.03em; text-transform: uppercase; margin: 0; line-height: 1.05; }
 	h1 small { display: block; font-size: 9.5px; font-weight: 600; letter-spacing: 0.14em; color: var(--ink-soft); margin-top: 5px; }
 	.grp { display: flex; flex-direction: column; gap: 8px; }

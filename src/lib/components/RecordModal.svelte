@@ -9,12 +9,13 @@
 	import { fmtBytes, fmtDate } from '$lib/repo/format.js';
 	import { tidToMs } from '$lib/atproto/tid.js';
 	import { appLinkFor } from '$lib/repo/appOf.js';
+	import { MICROBLOGGING_MAP, VIEWER_MAP } from '$lib/preferences.js';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	/** @type {{record: import('$lib/repo/types.js').ModalRecord | null, did: string | null,
 	 *          handle: string | null, agent: any, canWrite: boolean, isOwnRepo: boolean,
 	 *          onclose?: () => void, onchanged?: (e: {action: 'updated'|'deleted', record: any, value?: any}) => void,
-	 *          microblogging?: string}} */
+	 *          microblogging?: string, viewer?: string}} */
 	let {
 		record = null,
 		did = null,
@@ -24,7 +25,8 @@
 		isOwnRepo = false,
 		onclose,
 		onchanged,
-		microblogging = $bindable('bsky')
+		microblogging = $bindable('bsky'),
+		viewer = $bindable('pdsls.dev')
 	} = $props();
 
 	let editing = $state(false);
@@ -232,19 +234,7 @@
 		}
 	}
 
-	// pdsls.dev renders `at://did/collection` as a collection listing (its own
-	// breadcrumb treats the collection as a level), and `at://did/collection/
-	// rkey` as one record. An aggregate has no single record to point at --
-	// building the record-shaped URL for it would land on whichever rkey
-	// happened to be last in the block, exactly the bug this fixes -- so it
-	// gets the collection-scoped URL instead, and the button says so.
-	const pdslsUrl = $derived(
-		record ? `https://pdsls.dev/at://${did}/${record.col}${record.aggregate ? '' : `/${record.rkey}`}` : null
-	);
-
-	function pdsls() {
-		if (!record || !pdslsUrl) return;
-		const url = pdslsUrl;
+	function openExternal(url) {
 		// a synthetic link, not window.open: a features string makes it a popup,
 		// which blockers kill silently
 		const a = document.createElement('a');
@@ -256,13 +246,21 @@
 		a.remove();
 	}
 
-	// Mapping of microblogging preference IDs to domain and display info
-	const MICROBLOGGING_MAP = {
-		'bsky': { domain: 'bsky.app', label: 'Bluesky' },
-		'mu.social': { domain: 'mu.social', label: 'Mu' },
-		'blacksky': { domain: 'blacksky.app', label: 'Blacksky' },
-		'northsky': { domain: 'northsky.social', label: 'Northsky' }
-	};
+	const viewerLink = $derived.by(() => {
+		if (!record || !did) return null;
+		const choice = VIEWER_MAP[viewer] ?? VIEWER_MAP['pdsls.dev'];
+		const path = record.aggregate ? `${did}/${record.col}` : `${did}/${record.col}/${record.rkey}`;
+		if (choice.domain === 'aturi.to') {
+			return {
+				...choice,
+				url: `https://aturi.to/explore/${path}`
+			};
+		}
+		return {
+			...choice,
+			url: `https://pdsls.dev/at://${path}`
+		};
+	});
 
 	// The app that owns this record's lexicon, and the best URL to open on it
 	// (deep link for the four documented Bluesky shapes, domain root
@@ -287,7 +285,29 @@
 		
 		// Override with preferred microblogging app if this is a Bluesky collection
 		const preferred = MICROBLOGGING_MAP[microblogging];
-		if (preferred && base.col?.startsWith('app.bsky.')) {
+		if (preferred && base.domain === 'bsky.app') {
+			const subject = record?.value?.subject;
+			const subjectUri =
+				typeof subject === 'string'
+					? subject
+					: subject && typeof subject === 'object' && typeof subject.uri === 'string'
+						? subject.uri
+						: null;
+			const atUri =
+				typeof subjectUri === 'string' && subjectUri.startsWith('at://')
+					? subjectUri
+					: record?.rkey
+						? `at://${did}/${record.col}/${record.rkey}`
+						: null;
+
+			if (preferred.route === 'at-uri-path' && atUri) {
+				return {
+					...base,
+					domain: preferred.domain,
+					label: preferred.label,
+					url: `https://${preferred.domain}/${atUri}`
+				};
+			}
 			return {
 				...base,
 				domain: preferred.domain,
@@ -317,42 +337,66 @@
 	// currently shown, and whether both have failed. Reset per domain, not
 	// per record: switching between two records on the same app should not
 	// re-show an icon that already proved unreachable this session.
-	let iconSrcIndex = $state(0);
-	let iconGaveUp = $state(false);
+	let viewerIconSrcIndex = $state(0);
+	let viewerIconGaveUp = $state(false);
 	/** @type {string|null} */
-	let lastIconDomain = null;
+	let lastViewerIconDomain = null;
 	$effect(() => {
-		const domain = appLink?.domain ?? null;
-		if (domain === lastIconDomain) return;
-		lastIconDomain = domain;
-		iconSrcIndex = 0;
-		iconGaveUp = false;
+		const domain = viewerLink?.domain ?? null;
+		if (domain === lastViewerIconDomain) return;
+		lastViewerIconDomain = domain;
+		viewerIconSrcIndex = 0;
+		viewerIconGaveUp = false;
 	});
 
-	const iconSrc = $derived(
-		appLink && !iconGaveUp ? iconSourcesFor(appLink.domain)[iconSrcIndex] : null
+	const viewerIconSrc = $derived(
+		viewerLink && !viewerIconGaveUp ? iconSourcesFor(viewerLink.domain)[viewerIconSrcIndex] : null
 	);
 
-	function iconError() {
+	function viewerIconError() {
+		if (!viewerLink) return;
+		if (viewerIconSrcIndex < iconSourcesFor(viewerLink.domain).length - 1) {
+			viewerIconSrcIndex += 1;
+		} else {
+			viewerIconGaveUp = true;
+		}
+	}
+
+	let appIconSrcIndex = $state(0);
+	let appIconGaveUp = $state(false);
+	/** @type {string|null} */
+	let lastAppIconDomain = null;
+	$effect(() => {
+		const domain = appLink?.domain ?? null;
+		if (domain === lastAppIconDomain) return;
+		lastAppIconDomain = domain;
+		appIconSrcIndex = 0;
+		appIconGaveUp = false;
+	});
+
+	const appIconSrc = $derived(
+		appLink && !appIconGaveUp ? iconSourcesFor(appLink.domain)[appIconSrcIndex] : null
+	);
+
+	function appIconError() {
 		if (!appLink) return;
-		if (iconSrcIndex < iconSourcesFor(appLink.domain).length - 1) {
-			iconSrcIndex += 1;
+		if (appIconSrcIndex < iconSourcesFor(appLink.domain).length - 1) {
+			appIconSrcIndex += 1;
 		} else {
 			// both candidates failed -- hide the image entirely rather than
 			// leave a broken-image glyph; the button stays fully usable as text
-			iconGaveUp = true;
+			appIconGaveUp = true;
 		}
+	}
+
+	function openViewer() {
+		if (!viewerLink) return;
+		openExternal(viewerLink.url);
 	}
 
 	function openApp() {
 		if (!appLink) return;
-		const a = document.createElement('a');
-		a.href = appLink.url;
-		a.target = '_blank';
-		a.rel = 'noopener noreferrer';
-		document.body.appendChild(a);
-		a.click();
-		a.remove();
+		openExternal(appLink.url);
 	}
 </script>
 
@@ -430,21 +474,27 @@
 		{/if}
 
 		<footer>
-			<button class="ghost" onclick={pdsls}>
-				{record.aggregate ? 'Open collection on pdsls.dev' : 'Open on pdsls.dev'}
-			</button>
+			{#if viewerLink}
+				<button class="ghost app-link" onclick={openViewer} title={`Open in ${viewerLink.label} (${viewerLink.domain})`}>
+					{#if viewerIconSrc}
+						<img class="app-icon" src={viewerIconSrc} alt="" aria-hidden="true" onerror={viewerIconError} />
+					{/if}
+					Examine
+				</button>
+			{/if}
 
 			{#if appLink}
-				<button class="ghost app-link" onclick={openApp}>
-					{#if iconSrc}
-						<img class="app-icon" src={iconSrc} alt="" aria-hidden="true" onerror={iconError} />
+				<button
+					class="ghost app-link"
+					onclick={openApp}
+					title={appLink.subject
+						? `Open linked record in ${appLink.label || appLink.domain}`
+						: `Open in ${appLink.label || appLink.domain}`}
+				>
+					{#if appIconSrc}
+						<img class="app-icon" src={appIconSrc} alt="" aria-hidden="true" onerror={appIconError} />
 					{/if}
-					<!-- appLink.subject: this button opens what the record POINTS AT
-					     (e.g. the liked post), not the record itself -- pdsls.dev
-					     above stays the "show me this exact record" affordance.
-					     Say so, rather than just naming the domain, which reads as
-					     "open the record" and surprises when it isn't. -->
-					{appLink.subject ? `Open linked record on ${appLink.label || appLink.domain}` : `Open on ${appLink.label || appLink.domain}`}
+					{appLink.subject ? 'View linked' : 'View'}
 				</button>
 			{/if}
 
