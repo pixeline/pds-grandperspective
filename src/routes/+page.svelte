@@ -15,11 +15,13 @@
   import { selectDominantCollection } from "$lib/repo/dominance.js";
   import { defaultState, fromHash, toHash } from "$lib/repo/urlstate.js";
   import { getConnection } from "$lib/util/connection.js";
-  import { replaceState } from "$app/navigation";
 
   const session = createSessionStore();
 
   let handle = $state("");
+  // Draft input can change freely; URL state is derived from this committed
+  // handle only after an intentional action (pick/enter/read).
+  let committedHandle = $state("");
   let weigh = $state("bytes");
   let filters = $state({ hidden: new Set(), from: null, to: null, query: "" });
 
@@ -164,11 +166,11 @@
   });
 
   $effect(() => {
-    if (!data && !handle) return;
-    replaceState(
-      null,
+    if (!data && !committedHandle) return;
+    history.replaceState(
+      history.state,
       "",
-      toHash({ ...defaultState(), handle, weigh, ...filters }),
+      toHash({ ...defaultState(), handle: committedHandle, weigh, ...filters }),
     );
   });
 
@@ -183,10 +185,12 @@
    *   still gets the one-shot dominant-collection check.
    */
   async function draw(who = null, { suppressAutoHide = false } = {}) {
-    // take the handle explicitly: a two-way binding may not have propagated
-    // by the time a select callback fires
-    if (who) handle = who;
-    if (!handle.trim()) return;
+    // Commit the handle only on an intentional action: typeahead selection,
+    // Enter, or pressing Read.
+    const target = String(who ?? handle).trim();
+    if (!target) return;
+    handle = target;
+    committedHandle = target;
 
     ac?.abort();
     ac = new AbortController();
@@ -213,7 +217,7 @@
     ticker = setInterval(() => (elapsed = Date.now() - startedAt), 100);
 
     try {
-      const d = await readRepo(handle, {
+      const d = await readRepo(target, {
         signal: mine.signal,
         onProgress: (e) => {
           phase = e.phase;
@@ -374,6 +378,7 @@
 
     const s = fromHash(location.hash);
     handle = s.handle;
+    committedHandle = s.handle;
     weigh = s.weigh;
     filters = { hidden: s.hidden, from: s.from, to: s.to, query: s.query };
     // A `hide=` already present in the URL that opened this page names
