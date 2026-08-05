@@ -2,6 +2,8 @@
 
 See where an atproto repo's bytes actually go, then act on what you find.
 
+![screenshot](https://cdn.offprint.app/p/11261/conversions/pixeline.be-banner-3000x1000-large.jpg)
+
 Enter any handle or DID and the tool reads that repo in full, straight from its
 PDS in your browser, and draws it as a treemap: one cell per record, each
 cell's own area proportional to the bytes that record actually occupies (or to
