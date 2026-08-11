@@ -54,6 +54,12 @@
       See it work: <button class="link" onclick={() => onpick("pfrazee.com")}
         >pfrazee.com</button
       >
+      |
+      <a
+        class="link"
+        href="https://ideanation.pixeline.be/a/3msdzq6yz2t23-pds-grandperspective-visualize-your-atproto-account"
+        target="_blank">read more</a
+      > about the project
     </p>
   </div>
 
