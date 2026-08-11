@@ -7,6 +7,32 @@ import { recordTime } from './tid.js';
 import { audit } from './audit.js';
 
 /**
+ * Yield one macrotask so the browser can paint, WITHOUT the background-tab
+ * penalty. `setTimeout(0)` is clamped to >=1000ms in a hidden/blurred tab, so
+ * using it to pace a long parse would turn a few-second read into minutes the
+ * moment the user switches away. A `MessageChannel` message is a macrotask too
+ * -- the browser can paint between them -- but is exempt from that clamp, so
+ * the parse runs at full speed in the background and still animates in the
+ * foreground. Falls back to `setTimeout` where MessageChannel is absent.
+ *
+ * @returns {Promise<void>}
+ */
+function yieldToEventLoop() {
+	return new Promise((resolve) => {
+		if (typeof MessageChannel === 'undefined') {
+			setTimeout(resolve);
+			return;
+		}
+		const ch = new MessageChannel();
+		ch.port1.onmessage = () => {
+			ch.port1.close();
+			resolve();
+		};
+		ch.port2.postMessage(0);
+	});
+}
+
+/**
  * `com.atproto.sync.getRepo` returns the complete repo -- every record, the MST
  * nodes, and the signed commit -- in one CAR file. It is deliberately
  * unauthenticated: repo content is public.
@@ -108,6 +134,15 @@ export async function parseRepoCar(bytes, opts = {}) {
 		records.push(out);
 		collections.add(collection);
 		onRecord?.(out, records.length);
+
+		// Yield a real macrotask periodically. `walkRecords()` is otherwise one
+		// long synchronous run: the `await` in `for await` only queues
+		// microtasks, which drain *before* the browser paints, so the whole parse
+		// renders zero frames -- the record counter sits still and the loader
+		// never gets to show the colour of the lexicon streaming in. Yielding
+		// every few thousand records lets a frame paint. It does not sample or
+		// truncate: every record is still walked, measured, and kept.
+		if (records.length % 2048 === 0) await yieldToEventLoop();
 	}
 
 	// An undated record (no decodable TID, no createdAt) is not known to be the

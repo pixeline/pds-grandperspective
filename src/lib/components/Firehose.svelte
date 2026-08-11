@@ -7,8 +7,25 @@
 		records = 0,
 		collections = 0,
 		lines = [],
+		lastCol = null,
 		elapsed = 0
 	} = $props();
+
+	// Live colour for the loader, taken from the last lexicon streamed in.
+	// hues.js assigns a collection's hue by a golden-angle walk over the
+	// ALPHABETICALLY sorted *full* collection set. Mid-read we don't have the
+	// full set, so we walk the collections seen so far the same way: the colour
+	// evolves as new lexicons arrive and, once the last ones land, converges on
+	// exactly the hues the treemap will paint. `seen` is per-read -- this
+	// component mounts fresh each time a read starts.
+	const seen = new Set();
+	let hue = $state(/** @type {number | null} */ (null));
+	$effect(() => {
+		const c = lastCol;
+		if (!c) return;
+		seen.add(c);
+		hue = ([...seen].sort().indexOf(c) * 137.507) % 360;
+	});
 
 	const secs = $derived(Math.max(elapsed / 1000, 0.001));
 	const recPerSec = $derived(records > 0 ? Math.round(records / secs) : 0);
@@ -38,8 +55,15 @@
 	     earns the one bit of motion the design otherwise forbids; under
 	     prefers-reduced-motion it holds still at a visible opacity. -->
 	<div class="loader" aria-hidden="true">
-		<div class="pulse"></div>
+		<div
+			class="pulse"
+			class:colored={hue != null}
+			style={hue != null ? `background: hsl(${hue} 74% 52%)` : ''}
+		></div>
 		<div class="pulse-label">{label}</div>
+		{#if lastCol}
+			<div class="pulse-col">{lastCol}</div>
+		{/if}
 	</div>
 
 	<div class="stream" aria-hidden="true">
@@ -95,11 +119,19 @@
 		width: clamp(120px, 24vmin, 220px);
 		aspect-ratio: 1 / 1;
 		background: var(--ink);
-		/* base opacity is what a reduced-motion user sees held still, so it must
-		   read on its own, not only mid-animation */
-		opacity: 0.14;
+		/* --lo/--hi are the breathe range. Neutral (no block yet) stays a subtle
+		   grey; once a lexicon's colour lands the range lifts so the hue reads. */
+		--lo: 0.08;
+		--hi: 0.2;
+		opacity: var(--hi);
 		animation: breathe 1.7s ease-in-out infinite;
+		/* ease between one lexicon's colour and the next rather than snapping */
+		transition: background-color 0.55s ease;
 		will-change: opacity, transform;
+	}
+	.pulse.colored {
+		--lo: 0.55;
+		--hi: 0.9;
 	}
 	.pulse-label {
 		font-family: 'Inter', sans-serif;
@@ -109,14 +141,23 @@
 		text-transform: uppercase;
 		color: var(--ink-soft);
 	}
+	.pulse-col {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 12px;
+		color: var(--ink);
+		max-width: min(80vw, 420px);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
 	@keyframes breathe {
 		0%,
 		100% {
-			opacity: 0.08;
+			opacity: var(--lo);
 			transform: scale(0.96);
 		}
 		50% {
-			opacity: 0.2;
+			opacity: var(--hi);
 			transform: scale(1);
 		}
 	}
@@ -166,6 +207,7 @@
 		/* Hold the loader still at a clearly visible weight rather than freezing
 		   it mid-breath at a faint keyframe. */
 		.pulse { animation: none; opacity: 0.16; transform: none; }
+		.pulse.colored { opacity: 0.82; }
 	}
 
 	/* Side by side, the two halves need ~300px of log line plus ~200px of
