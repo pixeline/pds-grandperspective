@@ -47,6 +47,7 @@ export function paintPolar(ctx, layout, colors) {
 	ctx.stroke();
 
 	for (const a of axes) { // data points: hue = behaviour, saturation = recency
+		// 70% is the max saturation cap, so even a fresh ray avoids full-blast neon
 		ctx.fillStyle = `hsl(${a.hue.toFixed(1)} ${(a.sat * 70).toFixed(0)}% 50%)`;
 		ctx.fillRect(a.px - 2.5, a.py - 2.5, 5, 5);
 	}
