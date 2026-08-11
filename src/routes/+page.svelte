@@ -10,6 +10,7 @@
   import { readRepo } from "$lib/atproto/read.js";
   import { createSessionStore } from "$lib/atproto/session.svelte.js";
   import { collectionHues } from "$lib/repo/hues.js";
+  import { behaviorVector } from "$lib/repo/behavior.js";
   import { applyFilters } from "$lib/repo/filter.js";
   import { resolveHit } from "$lib/repo/resolveHit.js";
   import { selectDominantCollection } from "$lib/repo/dominance.js";
@@ -73,6 +74,7 @@
   // session, where the user either is or isn't on a slow network at the moment
   // they pressed Read. Reading once on mount keeps the wiring minimal.
   const connection = $derived(getConnection());
+  const behavior = $derived(data ? behaviorVector(data.records) : null);
 
   // The collection auto-hidden at the end of the read that produced `data`
   // (see draw()), and its share of that read's total bytes -- or null if
@@ -485,6 +487,7 @@
       {errors}
       autoHidden={autoHiddenNotice}
       hueOf={hues?.hueOf}
+      vector={behavior}
       {session}
       open={railOpen}
       ondraw={draw}
