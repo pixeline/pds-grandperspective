@@ -3,6 +3,7 @@
 	import Typeahead from './Typeahead.svelte';
 	import Footer from './Footer.svelte';
 	import Preferences from './Preferences.svelte';
+	import PolarProfile from './PolarProfile.svelte';
 	import { fmtBytes, fmtNum, fmtPct } from '$lib/repo/format.js';
 	import { appFilterOptions } from '$lib/repo/waypoints.js';
 
@@ -23,6 +24,7 @@
 		// is a standing line of text here, not a tooltip or a dimmed label.
 		autoHidden = null,
 		hueOf,
+		vector = null,
 		session = null,
 		// Narrow viewports only: below the breakpoint at the bottom of this
 		// file the rail stops being a column of the layout and becomes an
@@ -154,6 +156,10 @@
 			<p class="note warn">{session.error}</p>
 		{/if}
 	</div>
+
+	{#if vector}
+		<PolarProfile {vector} />
+	{/if}
 
 	<hr />
 
