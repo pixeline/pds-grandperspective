@@ -23,6 +23,12 @@ its lexicon (derived from the NSID by reverse-DNS, e.g. `app.bsky.feed.post`
 you're inspecting. That's the one third-party request in an otherwise
 fully client-to-PDS tool — accepted for icon coverage, not an oversight.
 
+## Update the opengraph image
+
+```
+node ~/.claude/skills/opengraph-image/scripts/render-og.js og-templates/og-default.html static/og-default.jpg && npm run build
+```
+
 ## Development
 
     npm install
