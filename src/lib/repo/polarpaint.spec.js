@@ -6,7 +6,7 @@ import { behaviorVector } from './behavior.js';
 /** A 2D-context stub that records the calls the painter makes, including their arguments. */
 function stubCtx() {
 	let fillStyle = null, strokeStyle = null;
-	const calls = { fillRect: [], fills: [], strokes: [], arc: 0, closePath: 0 };
+	const calls = { fillRect: [], fills: [], strokes: [], fillText: [], arc: 0, closePath: 0 };
 	return {
 		calls,
 		beginPath() {}, moveTo() {}, lineTo() {},
@@ -15,9 +15,13 @@ function stubCtx() {
 		fill() { calls.fills.push(fillStyle); },
 		arc() { calls.arc++; },
 		fillRect(x, y) { calls.fillRect.push({ x, y, fillStyle }); },
+		fillText(text, x, y) { calls.fillText.push({ text, x, y }); },
 		set fillStyle(v) { fillStyle = v; }, get fillStyle() { return fillStyle; },
 		set strokeStyle(v) { strokeStyle = v; }, get strokeStyle() { return strokeStyle; },
-		set lineWidth(_) {}
+		set lineWidth(_) {},
+		set font(_) {},
+		set textAlign(_) {},
+		set textBaseline(_) {}
 	};
 }
 
@@ -71,5 +75,13 @@ describe('paintPolar', () => {
 		paintPolar(ctx, layout, colors);
 		// The polygon stroke must use colors.ink
 		expect(ctx.calls.strokes.includes('#111')).toBe(true);
+	});
+
+	it('labels all four rings, once each, with the scale text', () => {
+		const ctx = stubCtx();
+		paintPolar(ctx, layout, colors);
+		expect(ctx.calls.fillText.length).toBe(4);
+		const texts = ctx.calls.fillText.map((c) => c.text);
+		expect(texts).toEqual(['10', '100', '1k', '10k']);
 	});
 });

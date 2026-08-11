@@ -78,11 +78,19 @@ export function polarLayout(vector, opts = {}) {
 		};
 	});
 
+	// The outermost ring is a clamp, not a ceiling: a count over 10k still plots
+	// at the edge (radiusFraction clamps rFrac to 1), so the '10k' label alone
+	// would understate it. Flag the ring honestly when that's happened.
+	const clamped = RAY_ORDER.some((key) => vector[key] > 10000);
+
 	return {
 		size,
 		center: { x: cx, y: cy },
 		radius: R,
-		rings: RINGS.map((ring) => ({ r: R * radiusFraction(ring.count), label: ring.label })),
+		rings: RINGS.map((ring) => ({
+			r: R * radiusFraction(ring.count),
+			label: ring.count === 10000 && clamped ? '10k+' : ring.label
+		})),
 		axes,
 		polygon: axes.map((a) => ({ x: a.px, y: a.py }))
 	};

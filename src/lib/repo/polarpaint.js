@@ -28,6 +28,17 @@ export function paintPolar(ctx, layout, colors) {
 
 	for (const r of rings) heptagon(r.r, colors.inkSoft); // concentric gridlines
 
+	// Ring scale labels ('10' / '100' / '1k' / '10k', or '10k+' when clamped),
+	// set where each ring crosses the top (Create) spoke. Text, not a mark on
+	// the data -- neutral chrome, same as the gridlines it annotates.
+	ctx.fillStyle = colors.inkSoft;
+	ctx.font = '9px "JetBrains Mono", monospace';
+	ctx.textAlign = 'center';
+	ctx.textBaseline = 'bottom';
+	for (const r of rings) {
+		ctx.fillText(r.label, center.x, center.y - r.r - 1);
+	}
+
 	ctx.strokeStyle = colors.inkSoft; // spokes
 	ctx.lineWidth = 1;
 	for (const a of axes) {

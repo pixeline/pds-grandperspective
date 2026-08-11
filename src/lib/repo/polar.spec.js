@@ -72,4 +72,18 @@ describe('polarLayout', () => {
 		expect(layout.rings.map((r) => r.label)).toEqual(['10', '100', '1k', '10k']);
 		expect(layout.rings[3].r).toBeCloseTo(layout.radius, 6);
 	});
+
+	it('marks the outermost ring 10k+ when a ray is clamped past 10k', () => {
+		const clampedVector = behaviorVector([
+			{ col: 'app.bsky.feed.like', ts: now, rkey: 'a', value: {} }
+		]);
+		clampedVector.react = 10001; // over the 10k edge -- radiusFraction still clamps to 1
+		const clampedLayout = polarLayout(clampedVector, { size: 200, pad: 20, now });
+		expect(clampedLayout.rings[3].label).toBe('10k+');
+		expect(clampedLayout.rings[3].r).toBeCloseTo(clampedLayout.radius, 6);
+	});
+
+	it('keeps the outermost ring 10k when nothing is clamped', () => {
+		expect(layout.rings[3].label).toBe('10k');
+	});
 });

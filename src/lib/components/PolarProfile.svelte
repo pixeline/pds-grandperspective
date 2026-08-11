@@ -2,7 +2,7 @@
 <script>
 	import { polarLayout } from '$lib/repo/polar.js';
 	import { paintPolar } from '$lib/repo/polarpaint.js';
-	import { dominantType } from '$lib/repo/behavior.js';
+	import { dominantType, RAY_ORDER } from '$lib/repo/behavior.js';
 	import { fmtNum } from '$lib/repo/format.js';
 
 	/** @type {{ vector: any, size?: number }} */
@@ -15,8 +15,7 @@
 	let showInfo = $state(false);
 
 	const totalDrawn = $derived(
-		vector ? ['create','converse','amplify','react','curate','connect','identity']
-			.reduce((s, k) => s + vector[k], 0) : 0
+		vector ? RAY_ORDER.reduce((s, k) => s + vector[k], 0) : 0
 	);
 	const type = $derived(vector ? dominantType(vector) : { ray: null, label: '—' });
 	const layout = $derived(vector ? polarLayout(vector, { size }) : null);
@@ -59,6 +58,7 @@
 		if (ang < 0) ang += 2 * Math.PI;
 		const i = Math.round(ang / ((2 * Math.PI) / 7)) % 7;
 		hover = layout.axes[i];
+		focusedIndex = i; // so a following arrow key continues from here, not index 0
 	}
 
 	// Keyboard equivalent of the pointer's angle-nearest lookup: the seven rays
