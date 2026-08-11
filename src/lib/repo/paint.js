@@ -70,7 +70,7 @@ export function paintMap(
 	const s = labelScale;
 	const insetTop = labelInset?.top ?? 0;
 	const insetLeft = labelInset?.left ?? 0;
-	ctx.font = `${LABEL_FONT_PX * s}px "IBM Plex Mono", monospace`;
+	ctx.font = `${LABEL_FONT_PX * s}px "JetBrains Mono", monospace`;
 	ctx.textBaseline = 'top';
 	for (const b of map.blocks) {
 		if (!b.label) continue;

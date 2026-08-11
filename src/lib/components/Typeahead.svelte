@@ -144,7 +144,7 @@
 		width: 100%;
 	}
 	input {
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 12px;
 		padding: 8px 9px;
 		border: 1px solid var(--rule);
@@ -169,7 +169,7 @@
 		right: 9px;
 		top: 50%;
 		transform: translateY(-50%);
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		color: var(--ink-soft);
 	}
 	ul {
@@ -216,7 +216,7 @@
 		min-width: 0;
 	}
 	.who b {
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 11.5px;
 		font-weight: 500;
 		white-space: nowrap;

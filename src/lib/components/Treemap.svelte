@@ -331,7 +331,7 @@
 		bottom: 16px;
 		max-width: calc(100% - 220px);
 		flex-wrap: wrap;
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 10.5px;
 		color: var(--ink);
 		background: var(--paper);
@@ -342,7 +342,7 @@
 		align-items: center;
 	}
 	.wt {
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 10px;
 		padding: 2px 6px;
 		border: 1px solid var(--ink);

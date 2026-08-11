@@ -56,7 +56,7 @@
 	table {
 		width: 100%;
 		border-collapse: collapse;
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 10px;
 	}
 	td {

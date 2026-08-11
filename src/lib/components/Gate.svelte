@@ -110,7 +110,7 @@
     gap: 10px;
   }
   .go {
-    font-family: "Archivo", sans-serif;
+    font-family: "Inter", sans-serif;
     font-size: 11px;
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -135,7 +135,7 @@
     text-align: left;
   }
   .facts li {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "JetBrains Mono", monospace;
     font-size: 11px;
     line-height: 1.55;
     color: var(--ink-soft);

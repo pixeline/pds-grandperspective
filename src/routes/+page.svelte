@@ -15,7 +15,7 @@
   import { selectDominantCollection } from "$lib/repo/dominance.js";
   import { defaultState, fromHash, toHash } from "$lib/repo/urlstate.js";
   import { getConnection } from "$lib/util/connection.js";
-  import { PREFERENCES_EVENT, STORAGE_KEY, loadPreferences } from "$lib/preferences.js";
+  import { PREFERENCES_EVENT, STORAGE_KEY, loadPreferences, favoriteIds } from "$lib/preferences.js";
 
   const session = createSessionStore();
 
@@ -24,9 +24,10 @@
   // handle only after an intentional action (pick/enter/read).
   let committedHandle = $state("");
   let weigh = $state("bytes");
-  let filters = $state({ hidden: new Set(), from: null, to: null, query: "" });
-  let microblogging = $state("bsky");
-  let viewer = $state("pdsls.dev");
+  let filters = $state({ hidden: new Set(), only: new Set(), from: null, to: null, query: "" });
+  let viewer = $state("aturiExplore");
+  /** @type {string[]} */
+  let favorites = $state([]);
 
   // Critical 1 survived three review rounds partly because these were
   // `$state(null)` with no annotation: TypeScript infers `null`, narrows
@@ -59,8 +60,8 @@
 
   function syncPreferences() {
     const prefs = loadPreferences();
-    microblogging = prefs.microblogging;
     viewer = prefs.viewer;
+    favorites = favoriteIds(prefs);
   }
   // Session-scoped dismiss for the slow-network warning banner. The page owns
   // dismissed state so the same WifiWarning instance handles one read's banner;
@@ -399,7 +400,7 @@
       handle = s.handle;
       committedHandle = s.handle;
       weigh = s.weigh;
-      filters = { hidden: s.hidden, from: s.from, to: s.to, query: s.query };
+      filters = { hidden: s.hidden, only: s.only, from: s.from, to: s.to, query: s.query };
       // A `hide=` already present in the URL that opened this page names
       // exactly what the sharer chose to hide -- auto-hide must not add a
       // collection on top of that, or a shared link would show its recipient
@@ -537,8 +538,9 @@
   agent={session.agent}
   canWrite={session.canWrite}
   {isOwnRepo}
-  microblogging={microblogging}
   viewer={viewer}
+  collections={data?.collections ?? []}
+  {favorites}
   onclose={() => (selected = null)}
   {onchanged}
 />
@@ -597,7 +599,7 @@
     font-size: 11px;
   }
   code {
-    font-family: "IBM Plex Mono", monospace;
+    font-family: "JetBrains Mono", monospace;
     font-size: 11px;
     background: var(--ground-deep);
     padding: 1px 4px;
@@ -630,7 +632,7 @@
       z-index: 13;
       min-height: 44px;
       padding: 0 14px;
-      font-family: "Archivo", sans-serif;
+      font-family: "Inter", sans-serif;
       font-size: 10px;
       font-weight: 700;
       letter-spacing: 0.12em;

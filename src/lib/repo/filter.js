@@ -59,12 +59,17 @@ function haystackOf(r) {
 
 /**
  * @param {Array<any>} records
- * @param {{hidden: Set<string>, from: number|null, to: number|null, query: string}} f
+ * @param {{hidden: Set<string>, only?: Set<string>, from: number|null, to: number|null, query: string}} f
  */
 export function applyFilters(records, f) {
-	const { hidden, from, to, query } = f;
+	const { hidden, only, from, to, query } = f;
 	const q = (query ?? '').trim().toLowerCase();
 	const hasHidden = hidden && hidden.size > 0;
+	// `only` is a show-list of namespace prefixes (the app filter): when it is
+	// non-empty a record must sit under at least one of them to survive. It
+	// composes with `hidden` -- a collection can be shown by `only` and still be
+	// hidden by an explicit `hidden` entry. Empty/absent means no restriction.
+	const hasOnly = only && only.size > 0;
 
 	const out = [];
 	let bytes = 0;
@@ -73,6 +78,7 @@ export function applyFilters(records, f) {
 	for (const r of records) {
 		totalBytes += r.bytes || 0;
 
+		if (hasOnly && ![...only].some((sel) => underNamespace(r.col, sel))) continue;
 		if (hasHidden && [...hidden].some((sel) => underNamespace(r.col, sel))) continue;
 
 		// An undated record -- no decodable TID, no createdAt -- cannot be shown

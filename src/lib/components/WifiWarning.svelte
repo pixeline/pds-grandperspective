@@ -34,7 +34,7 @@
 		background: var(--paper);
 		border: 1px solid var(--ink);
 		border-left-width: 2px;
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 11px;
 		line-height: 1.4;
 		color: var(--ink);
@@ -42,7 +42,7 @@
 	.wifi span { flex: 1; }
 	.wifi button {
 		flex: none;
-		font-family: 'Archivo', sans-serif;
+		font-family: 'Inter', sans-serif;
 		font-size: 10px;
 		font-weight: 700;
 		letter-spacing: 0.12em;

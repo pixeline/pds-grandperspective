@@ -1,29 +1,22 @@
 <script>
 	import { onMount } from 'svelte';
-	import {
-		MICROBLOGGING_OPTS,
-		VIEWER_OPTS,
-		loadPreferences,
-		savePreferences
-	} from '$lib/preferences.js';
+	import { PREF_GROUPS, optionsFor, loadPreferences, savePreferences } from '$lib/preferences.js';
 
-	// Initialize from localStorage
-	let microblogging = $state('bsky');
-	let viewer = $state('pdsls.dev');
+	/** Selected waypoint id per group, keyed by group id. */
+	let selection = $state(/** @type {Record<string, string>} */ ({}));
 	let saved = $state(false);
 
+	// Options are fixed for the session (the catalog doesn't change at runtime).
+	const GROUPS = PREF_GROUPS.map((g) => ({ ...g, options: optionsFor(g.id) }));
+
 	onMount(() => {
-		const prefs = loadPreferences();
-		microblogging = prefs.microblogging;
-		viewer = prefs.viewer;
+		selection = loadPreferences();
 	});
 
 	async function save() {
 		saved = false;
 		try {
-			const prefs = savePreferences({ microblogging, viewer });
-			microblogging = prefs.microblogging;
-			viewer = prefs.viewer;
+			selection = savePreferences(selection);
 			saved = true;
 			setTimeout(() => (saved = false), 3000);
 		} catch (/** @type {any} */ err) {
@@ -33,32 +26,20 @@
 </script>
 
 <div class="preferences">
-	<h2>Preferences</h2>
-
-	<div class="section">
-		<label class="lbl" for="pref-microblogging">Microblogging App</label>
-		<select id="pref-microblogging" bind:value={microblogging}>
-			{#each MICROBLOGGING_OPTS as opt (opt.id)}
-				<option value={opt.id}>{opt.label}</option>
-			{/each}
-		</select>
-		<span class="hint">Choose your preferred microblogging platform</span>
-	</div>
-
-	<div class="section">
-		<label class="lbl" for="pref-viewer">Record Viewer</label>
-		<select id="pref-viewer" bind:value={viewer}>
-			{#each VIEWER_OPTS as opt (opt.id)}
-				<option value={opt.id}>{opt.label}</option>
-			{/each}
-		</select>
-		<span class="hint">Choose your preferred record viewer</span>
-	</div>
+	{#each GROUPS as group (group.id)}
+		<div class="section">
+			<label class="lbl" for={`pref-${group.id}`}>{group.label}</label>
+			<select id={`pref-${group.id}`} bind:value={selection[group.id]}>
+				{#each group.options as opt (opt.id)}
+					<option value={opt.id}>{opt.name}</option>
+				{/each}
+			</select>
+			<span class="hint">{group.hint}</span>
+		</div>
+	{/each}
 
 	<div class="actions">
-		<button onclick={save}>
-			Save Preferences
-		</button>
+		<button onclick={save}>Save Preferences</button>
 		{#if saved}
 			<span class="saved">Saved!</span>
 		{/if}
@@ -66,23 +47,12 @@
 </div>
 
 <style>
+	/* No border/background: the sidebar separates sections with horizontal
+	   rules, not boxes. The collapsible "Preferences" summary in Rail is the
+	   only heading -- the component adds none of its own. */
 	.preferences {
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 11px;
-		color: var(--ink);
-		background: var(--paper);
-		border: 1px solid var(--rule);
-		padding: 16px;
-		margin-top: 12px;
-	}
-
-	.preferences h2 {
-		font-family: 'Archivo', sans-serif;
-		font-size: 13px;
-		font-weight: 700;
-		letter-spacing: 0.08em;
-		text-transform: uppercase;
-		margin: 0 0 14px 0;
 		color: var(--ink);
 	}
 
@@ -101,7 +71,7 @@
 		width: 100%;
 		max-width: 300px;
 		padding: 6px 10px;
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 11px;
 		border: 1px solid var(--ink);
 		background: var(--paper);
@@ -133,7 +103,7 @@
 	}
 
 	.preferences button {
-		font-family: 'Archivo', sans-serif;
+		font-family: 'Inter', sans-serif;
 		font-size: 10px;
 		font-weight: 700;
 		letter-spacing: 0.12em;
@@ -160,5 +130,4 @@
 		color: var(--ink);
 		font-size: 10px;
 	}
-
 </style>
