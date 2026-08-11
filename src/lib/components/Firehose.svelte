@@ -31,6 +31,17 @@
 </script>
 
 <div class="fh">
+	<!-- A big, gently breathing block at dead center: the focal "reading…"
+	     indicator. Neutral by design -- hue belongs to the data, not the
+	     chrome -- and a square because the whole tool is rectangles. It is
+	     functional feedback (it says "working"), not ornament, which is why it
+	     earns the one bit of motion the design otherwise forbids; under
+	     prefers-reduced-motion it holds still at a visible opacity. -->
+	<div class="loader" aria-hidden="true">
+		<div class="pulse"></div>
+		<div class="pulse-label">{label}</div>
+	</div>
+
 	<div class="stream" aria-hidden="true">
 		{#each lines as l (l.rkey + l.col)}
 			<div class="ln">
@@ -67,6 +78,47 @@
 		background: var(--ground);
 		font-family: 'JetBrains Mono', monospace;
 		overflow: hidden;
+	}
+	/* Centered focal loader, above the log/counters but non-interactive. */
+	.loader {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 18px;
+		pointer-events: none;
+	}
+	.pulse {
+		width: clamp(120px, 24vmin, 220px);
+		aspect-ratio: 1 / 1;
+		background: var(--ink);
+		/* base opacity is what a reduced-motion user sees held still, so it must
+		   read on its own, not only mid-animation */
+		opacity: 0.14;
+		animation: breathe 1.7s ease-in-out infinite;
+		will-change: opacity, transform;
+	}
+	.pulse-label {
+		font-family: 'Inter', sans-serif;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+		color: var(--ink-soft);
+	}
+	@keyframes breathe {
+		0%,
+		100% {
+			opacity: 0.08;
+			transform: scale(0.96);
+		}
+		50% {
+			opacity: 0.2;
+			transform: scale(1);
+		}
 	}
 	.stream {
 		display: flex;
@@ -111,6 +163,9 @@
 	dd { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
 	@media (prefers-reduced-motion: reduce) {
 		.ln:nth-last-child(n + 12) { opacity: 1; }
+		/* Hold the loader still at a clearly visible weight rather than freezing
+		   it mid-breath at a faint keyframe. */
+		.pulse { animation: none; opacity: 0.16; transform: none; }
 	}
 
 	/* Side by side, the two halves need ~300px of log line plus ~200px of
