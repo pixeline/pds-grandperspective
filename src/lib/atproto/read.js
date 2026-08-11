@@ -25,7 +25,7 @@ export const DEFAULT_LIMIT_BYTES = 150 * 1024 * 1024;
  *
  * @param {string} input handle or DID
  * @param {{signal?: AbortSignal,
- *          onProgress?: (e: {phase: string, bytes?: number, records?: number, message: string}) => void,
+ *          onProgress?: (e: {phase: string, bytes?: number, records?: number, col?: string, message: string}) => void,
  *          onSizeGate?: (bytes: number) => Promise<boolean>,
  *          limitBytes?: number, now?: number, fetchImpl?: typeof fetch}} [opts]
  * @returns {Promise<{did: string, handle: string|null, pds: string, rev: string|null,
@@ -64,8 +64,12 @@ export async function readRepo(input, opts = {}) {
 		say('parsing', 'Parsing repository…', { bytes: bytes.length });
 		out = await parseRepoCar(bytes, {
 			now,
-			onRecord: (_r, n) => {
-				if (n % 500 === 0) say('parsing', `${n} records`, { records: n });
+			onRecord: (r, n) => {
+				// `col` rides along so the loading indicator can take on the colour
+				// of the block currently streaming in. CAR records arrive grouped
+				// by NSID, so this holds on one collection then jumps at each
+				// boundary -- exactly "the colour of the last loaded block".
+				if (n % 500 === 0) say('parsing', `${n} records`, { records: n, col: r.col });
 			}
 		});
 	} catch (err) {
@@ -79,7 +83,7 @@ export async function readRepo(input, opts = {}) {
 			signal,
 			now,
 			fetchImpl,
-			onProgress: (message, records) => say('listing', message, { records })
+			onProgress: (message, records, col) => say('listing', message, { records, col })
 		});
 	}
 

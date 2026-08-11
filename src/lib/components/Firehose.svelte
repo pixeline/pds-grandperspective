@@ -7,8 +7,30 @@
 		records = 0,
 		collections = 0,
 		lines = [],
+		lastCol = null,
 		elapsed = 0
 	} = $props();
+
+	// Fill level of the loader, 0..1. `com.atproto.sync.getRepo` sends no
+	// Content-Length (the body is chunked), so there is NO true total to divide
+	// by -- a real percentage is impossible. This is an honest-feeling estimate
+	// instead: it only ever moves forward, front-loads so it feels quick early,
+	// and eases as it climbs so it never claims completion before the read
+	// actually finishes. Each phase has a floor so the transition between them
+	// visibly bumps the fill up.
+	//   receiving: driven by bytes downloaded (the long phase), half-life 16 MB
+	//   parsing/listing: driven by records seen, half-life 20k
+	// The half-lives are deliberately large so the climb stays gradual across a
+	// big download instead of rushing to near-full in the first second and then
+	// appearing to stall.
+	const MB = 1024 * 1024;
+	const progress = $derived.by(() => {
+		if (phase === 'resolving') return 0.03;
+		if (phase === 'receiving') return 0.05 + 0.72 * (1 - Math.pow(2, -bytes / (16 * MB)));
+		if (phase === 'parsing' || phase === 'listing')
+			return 0.8 + 0.18 * (1 - Math.pow(2, -records / 20000));
+		return 0.05;
+	});
 
 	const secs = $derived(Math.max(elapsed / 1000, 0.001));
 	const recPerSec = $derived(records > 0 ? Math.round(records / secs) : 0);
@@ -31,6 +53,22 @@
 </script>
 
 <div class="fh">
+	<!-- A big, gently breathing block at dead center: the focal "reading…"
+	     indicator. Neutral by design -- hue belongs to the data, not the
+	     chrome -- and a square because the whole tool is rectangles. It is
+	     functional feedback (it says "working"), not ornament, which is why it
+	     earns the one bit of motion the design otherwise forbids; under
+	     prefers-reduced-motion it holds still at a visible opacity. -->
+	<div class="loader" aria-hidden="true">
+		<div class="pulse">
+			<div class="fill" style="height: {(progress * 100).toFixed(1)}%"></div>
+		</div>
+		<div class="pulse-label">{label}</div>
+		{#if lastCol}
+			<div class="pulse-col">{lastCol}</div>
+		{/if}
+	</div>
+
 	<div class="stream" aria-hidden="true">
 		{#each lines as l (l.rkey + l.col)}
 			<div class="ln">
@@ -67,6 +105,68 @@
 		background: var(--ground);
 		font-family: 'JetBrains Mono', monospace;
 		overflow: hidden;
+	}
+	/* Centered focal loader, above the log/counters but non-interactive. */
+	.loader {
+		position: absolute;
+		inset: 0;
+		z-index: 2;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 18px;
+		pointer-events: none;
+	}
+	/* An outline square that fills bottom-up with the read's progress. Area
+	   filled == progress, so it reads as "percentage of the surface". */
+	.pulse {
+		position: relative;
+		width: clamp(120px, 24vmin, 220px);
+		aspect-ratio: 1 / 1;
+		border: 2px solid var(--ink-soft);
+		background: transparent;
+		overflow: hidden;
+	}
+	.fill {
+		position: absolute;
+		left: 0;
+		bottom: 0;
+		width: 100%;
+		/* the one colour: the app's signature purple (the favicon's dominant
+		   block). Height is set inline from `progress`. */
+		background: hsl(262 74% 52%);
+		/* smooth the step each time bytes/records tick up */
+		transition: height 0.35s ease;
+		/* never look frozen between chunks */
+		animation: fillbreathe 1.8s ease-in-out infinite;
+		will-change: opacity;
+	}
+	@keyframes fillbreathe {
+		0%,
+		100% {
+			opacity: 0.78;
+		}
+		50% {
+			opacity: 1;
+		}
+	}
+	.pulse-label {
+		font-family: 'Inter', sans-serif;
+		font-size: 10px;
+		font-weight: 700;
+		letter-spacing: 0.22em;
+		text-transform: uppercase;
+		color: var(--ink-soft);
+	}
+	.pulse-col {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 12px;
+		color: var(--ink);
+		max-width: min(80vw, 420px);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.stream {
 		display: flex;
@@ -111,6 +211,10 @@
 	dd { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
 	@media (prefers-reduced-motion: reduce) {
 		.ln:nth-last-child(n + 12) { opacity: 1; }
+		/* The fill still shows the read's progress -- it just stops breathing and
+		   snaps to each level instead of easing. The height is information, so it
+		   stays; only the ornamental motion is dropped. */
+		.fill { animation: none; transition: none; opacity: 1; }
 	}
 
 	/* Side by side, the two halves need ~300px of log line plus ~200px of

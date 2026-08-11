@@ -95,6 +95,10 @@
   let gotRecords = $state(0);
   /** @type {Array<{ts: number|null, col: string, rkey: string, bytes: number}>} */
   let lines = $state([]);
+  // The collection of the block most recently streamed in during a read; the
+  // loading indicator colours itself from it. Null until the first record.
+  /** @type {string | null} */
+  let lastCol = $state(null);
   let startedAt = $state(0);
   let elapsed = $state(0);
 
@@ -220,6 +224,7 @@
     gotBytes = 0;
     gotRecords = 0;
     lines = [];
+    lastCol = null;
     phase = "resolving";
     startedAt = Date.now();
     elapsed = 0;
@@ -234,6 +239,7 @@
           status = e.message;
           if (e.bytes != null) gotBytes = e.bytes;
           if (e.records != null) gotRecords = e.records;
+          if (e.col) lastCol = e.col;
         },
         onSizeGate: async (bytes) =>
           confirm(
@@ -503,6 +509,7 @@
         records={gotRecords}
         collections={data?.collections.length ?? 0}
         {lines}
+        {lastCol}
         {elapsed}
       />
     {:else if data && hues && filtered}

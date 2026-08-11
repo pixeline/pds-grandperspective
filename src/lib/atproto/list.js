@@ -26,7 +26,7 @@ const MAX_PAGES_PER_COLLECTION = 4000;
  *
  * @param {string} pds
  * @param {string} did
- * @param {{signal?: AbortSignal, onProgress?: (msg: string, n: number) => void,
+ * @param {{signal?: AbortSignal, onProgress?: (msg: string, n: number, col: string) => void,
  *          now?: number, fetchImpl?: typeof fetch}} [opts]
  * @returns {Promise<{records: import('../repo/types.js').RepoRecord[], collections: string[]}>}
  */
@@ -79,7 +79,7 @@ export async function listAllRecords(pds, did, opts = {}) {
 				collections.add(col);
 			}
 
-			onProgress?.(`${records.length} records · ${col.split('.').pop()}`, records.length);
+			onProgress?.(`${records.length} records · ${col.split('.').pop()}`, records.length, col);
 			cursor = j.cursor || null;
 			if (!cursor) break;
 		}
