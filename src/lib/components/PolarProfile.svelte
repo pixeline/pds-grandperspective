@@ -9,7 +9,9 @@
 	let { vector = null, size = 220 } = $props();
 
 	let canvas = $state(null);
-	let hover = $state(null); // the axis under the pointer, or null
+	let hover = $state(null); // the axis under the pointer/focus, or null
+	/** @type {number | null} */
+	let focusedIndex = $state(null); // keyboard focus index into layout.axes, or null
 	let showInfo = $state(false);
 
 	const totalDrawn = $derived(
@@ -32,10 +34,14 @@
 		const ctx = canvas.getContext('2d');
 		ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 		ctx.clearRect(0, 0, size, size);
+		const ink = inkOf('--ink');
 		paintPolar(ctx, layout, {
-			ink: inkOf('--ink'),
+			ink,
 			inkSoft: inkOf('--ink-soft'),
-			fill: 'color-mix(in srgb, var(--ink) 12%, transparent)'
+			// Canvas fillStyle cannot resolve a CSS var() -- the assignment is
+			// silently rejected and falls back to #000000. Build the mix from
+			// the already-resolved colour, which canvas parses fine.
+			fill: `color-mix(in srgb, ${ink} 12%, transparent)`
 		});
 	});
 
@@ -55,6 +61,34 @@
 		hover = layout.axes[i];
 	}
 
+	// Keyboard equivalent of the pointer's angle-nearest lookup: the seven rays
+	// have a fixed, known order (layout.axes), so arrow keys simply step
+	// through it -- no angle math needed once a ray has keyboard focus.
+	function onKeydown(e) {
+		if (!layout) return;
+		if (['ArrowRight', 'ArrowDown', 'ArrowLeft', 'ArrowUp'].includes(e.key)) {
+			e.preventDefault();
+			const current = focusedIndex ?? 0;
+			const next =
+				e.key === 'ArrowRight' || e.key === 'ArrowDown'
+					? (current + 1) % 7
+					: (current + 6) % 7;
+			focusedIndex = next;
+			hover = layout.axes[next];
+		}
+	}
+
+	function onPlotFocus() {
+		if (!layout) return;
+		if (focusedIndex == null) focusedIndex = 0;
+		hover = layout.axes[focusedIndex];
+	}
+
+	function onPlotBlur() {
+		hover = null;
+		focusedIndex = null;
+	}
+
 	const asDate = (ts) => (ts == null ? '—' : new Date(ts).toISOString().slice(0, 10));
 </script>
 
@@ -64,9 +98,10 @@
 		<button
 			class="info"
 			aria-label="About this chart"
-			onclick={() => (showInfo = !showInfo)}
 			onmouseenter={() => (showInfo = true)}
 			onmouseleave={() => (showInfo = false)}
+			onfocus={() => (showInfo = true)}
+			onblur={() => (showInfo = false)}
 		>i</button>
 	</div>
 
@@ -75,8 +110,14 @@
 	{:else}
 		<div
 			class="plot"
+			role="group"
+			tabindex="0"
+			aria-label="Behavioural profile. Arrow keys move between the seven activity rays."
 			onpointermove={onMove}
 			onpointerleave={() => (hover = null)}
+			onkeydown={onKeydown}
+			onfocus={onPlotFocus}
+			onblur={onPlotBlur}
 		>
 			<canvas bind:this={canvas} style="width:{size}px;height:{size}px"></canvas>
 			{#each layout.axes as a (a.key)}
@@ -86,11 +127,11 @@
 
 		<p class="type">{type.label}</p>
 
-		{#if hover}
-			<p class="read">
+		<p class="read" aria-live="polite">
+			{#if hover}
 				<b>{hover.label}</b> · {fmtNum(hover.count)} · last {asDate(vector.lastActive[hover.key])}
-			</p>
-		{/if}
+			{/if}
+		</p>
 	{/if}
 
 	{#if showInfo}
