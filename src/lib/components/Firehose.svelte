@@ -11,20 +11,25 @@
 		elapsed = 0
 	} = $props();
 
-	// Live colour for the loader, taken from the last lexicon streamed in.
-	// hues.js assigns a collection's hue by a golden-angle walk over the
-	// ALPHABETICALLY sorted *full* collection set. Mid-read we don't have the
-	// full set, so we walk the collections seen so far the same way: the colour
-	// evolves as new lexicons arrive and, once the last ones land, converges on
-	// exactly the hues the treemap will paint. `seen` is per-read -- this
-	// component mounts fresh each time a read starts.
-	const seen = new Set();
-	let hue = $state(/** @type {number | null} */ (null));
-	$effect(() => {
-		const c = lastCol;
-		if (!c) return;
-		seen.add(c);
-		hue = ([...seen].sort().indexOf(c) * 137.507) % 360;
+	// Fill level of the loader, 0..1. `com.atproto.sync.getRepo` sends no
+	// Content-Length (the body is chunked), so there is NO true total to divide
+	// by -- a real percentage is impossible. This is an honest-feeling estimate
+	// instead: it only ever moves forward, front-loads so it feels quick early,
+	// and eases as it climbs so it never claims completion before the read
+	// actually finishes. Each phase has a floor so the transition between them
+	// visibly bumps the fill up.
+	//   receiving: driven by bytes downloaded (the long phase), half-life 16 MB
+	//   parsing/listing: driven by records seen, half-life 20k
+	// The half-lives are deliberately large so the climb stays gradual across a
+	// big download instead of rushing to near-full in the first second and then
+	// appearing to stall.
+	const MB = 1024 * 1024;
+	const progress = $derived.by(() => {
+		if (phase === 'resolving') return 0.03;
+		if (phase === 'receiving') return 0.05 + 0.72 * (1 - Math.pow(2, -bytes / (16 * MB)));
+		if (phase === 'parsing' || phase === 'listing')
+			return 0.8 + 0.18 * (1 - Math.pow(2, -records / 20000));
+		return 0.05;
 	});
 
 	const secs = $derived(Math.max(elapsed / 1000, 0.001));
@@ -55,11 +60,9 @@
 	     earns the one bit of motion the design otherwise forbids; under
 	     prefers-reduced-motion it holds still at a visible opacity. -->
 	<div class="loader" aria-hidden="true">
-		<div
-			class="pulse"
-			class:colored={hue != null}
-			style={hue != null ? `background: hsl(${hue} 74% 52%)` : ''}
-		></div>
+		<div class="pulse">
+			<div class="fill" style="height: {(progress * 100).toFixed(1)}%"></div>
+		</div>
 		<div class="pulse-label">{label}</div>
 		{#if lastCol}
 			<div class="pulse-col">{lastCol}</div>
@@ -115,23 +118,38 @@
 		gap: 18px;
 		pointer-events: none;
 	}
+	/* An outline square that fills bottom-up with the read's progress. Area
+	   filled == progress, so it reads as "percentage of the surface". */
 	.pulse {
+		position: relative;
 		width: clamp(120px, 24vmin, 220px);
 		aspect-ratio: 1 / 1;
-		background: var(--ink);
-		/* --lo/--hi are the breathe range. Neutral (no block yet) stays a subtle
-		   grey; once a lexicon's colour lands the range lifts so the hue reads. */
-		--lo: 0.08;
-		--hi: 0.2;
-		opacity: var(--hi);
-		animation: breathe 1.7s ease-in-out infinite;
-		/* ease between one lexicon's colour and the next rather than snapping */
-		transition: background-color 0.55s ease;
-		will-change: opacity, transform;
+		border: 2px solid var(--ink-soft);
+		background: transparent;
+		overflow: hidden;
 	}
-	.pulse.colored {
-		--lo: 0.55;
-		--hi: 0.9;
+	.fill {
+		position: absolute;
+		left: 0;
+		bottom: 0;
+		width: 100%;
+		/* the one colour: the app's signature purple (the favicon's dominant
+		   block). Height is set inline from `progress`. */
+		background: hsl(262 74% 52%);
+		/* smooth the step each time bytes/records tick up */
+		transition: height 0.35s ease;
+		/* never look frozen between chunks */
+		animation: fillbreathe 1.8s ease-in-out infinite;
+		will-change: opacity;
+	}
+	@keyframes fillbreathe {
+		0%,
+		100% {
+			opacity: 0.78;
+		}
+		50% {
+			opacity: 1;
+		}
 	}
 	.pulse-label {
 		font-family: 'Inter', sans-serif;
@@ -149,17 +167,6 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-	@keyframes breathe {
-		0%,
-		100% {
-			opacity: var(--lo);
-			transform: scale(0.96);
-		}
-		50% {
-			opacity: var(--hi);
-			transform: scale(1);
-		}
 	}
 	.stream {
 		display: flex;
@@ -204,10 +211,10 @@
 	dd { margin: 0; font-size: 22px; font-weight: 500; letter-spacing: -0.02em; }
 	@media (prefers-reduced-motion: reduce) {
 		.ln:nth-last-child(n + 12) { opacity: 1; }
-		/* Hold the loader still at a clearly visible weight rather than freezing
-		   it mid-breath at a faint keyframe. */
-		.pulse { animation: none; opacity: 0.16; transform: none; }
-		.pulse.colored { opacity: 0.82; }
+		/* The fill still shows the read's progress -- it just stops breathing and
+		   snaps to each level instead of easing. The height is information, so it
+		   stays; only the ornamental motion is dropped. */
+		.fill { animation: none; transition: none; opacity: 1; }
 	}
 
 	/* Side by side, the two halves need ~300px of log line plus ~200px of
