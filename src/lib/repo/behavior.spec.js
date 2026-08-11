@@ -72,3 +72,28 @@ describe('behaviorVector', () => {
 		expect(v.unclassified).toBe(0);
 	});
 });
+
+import { dominantType } from './behavior.js';
+
+describe('dominantType', () => {
+	const zero = behaviorVector([]);
+
+	it('names the busiest ray', () => {
+		const v = { ...zero, react: 900, create: 100 };
+		expect(dominantType(v)).toEqual({ ray: 'react', label: 'Listener' });
+	});
+
+	it('breaks ties by ray order (create before react)', () => {
+		const v = { ...zero, create: 5, react: 5 };
+		expect(dominantType(v)).toEqual({ ray: 'create', label: 'Broadcaster' });
+	});
+
+	it('calls an identity-led repo a Newcomer', () => {
+		const v = { ...zero, identity: 1 };
+		expect(dominantType(v)).toEqual({ ray: 'identity', label: 'Newcomer' });
+	});
+
+	it('has no type for an empty repo', () => {
+		expect(dominantType(zero)).toEqual({ ray: null, label: '—' });
+	});
+});

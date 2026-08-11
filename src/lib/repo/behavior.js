@@ -92,3 +92,32 @@ export function behaviorVector(records) {
 		lastActive
 	};
 }
+
+const TYPE_LABEL = {
+	create: 'Broadcaster',
+	converse: 'Host',
+	amplify: 'Repeater',
+	react: 'Listener',
+	curate: 'Curator',
+	connect: 'Connector',
+	identity: 'Newcomer'
+};
+
+/**
+ * The single word for a profile: the label of its busiest ray. Ties break by
+ * RAY_ORDER (iteration order, strictly-greater replace). A repo with no drawn
+ * records has no type.
+ * @param {ReturnType<behaviorVector>} vector
+ * @returns {{ray: string|null, label: string}}
+ */
+export function dominantType(vector) {
+	let best = null;
+	let bestN = 0;
+	for (const key of RAY_ORDER) {
+		if (vector[key] > bestN) {
+			bestN = vector[key];
+			best = key;
+		}
+	}
+	return best == null ? { ray: null, label: '—' } : { ray: best, label: TYPE_LABEL[best] };
+}
