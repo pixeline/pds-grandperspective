@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;900&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    /* International Style, applied to data — the app's own constraints:
+       no rounded corners, no shadows, no gradients. Chroma belongs to the
+       treemap (hsl(H 74% 52%), the app's exact formula); chrome is neutral. */
+    body {
+      width: 1200px; height: 630px;
+      display: flex;
+      font-family: 'Inter', system-ui, sans-serif;
+      background: #0a0a0a;
+      color: #ffffff;
+      overflow: hidden;
+    }
+
+    /* ---- Left: the message ---- */
+    .panel {
+      width: 696px;
+      height: 630px;
+      background: #171717;
+      padding: 64px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      border-right: 2px solid #0a0a0a;
+    }
+    .top { display: flex; align-items: center; gap: 14px; }
+    .mark { width: 30px; height: 30px; display: block; }
+    .eyebrow {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 20px; font-weight: 600;
+      letter-spacing: 0.10em; text-transform: uppercase;
+      color: #a3a3a3;
+    }
+    h1 {
+      font-size: 74px; font-weight: 900;
+      line-height: 1.04; letter-spacing: -0.02em;
+      max-width: 560px;
+    }
+    .subtitle {
+      font-size: 29px; font-weight: 600;
+      line-height: 1.32; color: #b4b4b4;
+      margin-top: 22px; max-width: 540px;
+    }
+    .foot {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 19px; font-weight: 500;
+      letter-spacing: 0.04em; color: #737373;
+      display: flex; gap: 12px; align-items: center;
+    }
+    .foot .dot { color: #525252; }
+
+    /* ---- Right: a treemap in the app's hues ---- */
+    .map { flex: 1; height: 630px; display: flex; flex-direction: column; gap: 3px; background: #0a0a0a; }
+    .row { display: flex; gap: 3px; width: 100%; }
+    .col { display: flex; flex-direction: column; gap: 3px; }
+    .b { }
+    .strip { display: flex; gap: 3px; }
+    .strip .b { flex: 1; }
+  </style>
+</head>
+<body>
+  <div class="panel">
+    <div class="top">
+      <!-- the app's own mark: a miniature treemap -->
+      <svg class="mark" viewBox="0 0 64 64" shape-rendering="crispEdges">
+        <rect width="64" height="64" fill="#0a0a0a"/>
+        <rect x="0" y="0" width="34.84" height="63" fill="hsl(262.6 74% 52%)"/>
+        <rect x="35.84" y="0" width="27.16" height="21.75" fill="hsl(282.7 74% 52%)"/>
+        <rect x="35.84" y="22.75" width="27.16" height="15.55" fill="hsl(177.6 74% 52%)"/>
+        <rect x="35.84" y="39.29" width="12.31" height="23.71" fill="hsl(146.2 74% 52%)"/>
+        <rect x="49.15" y="39.29" width="13.85" height="9.55" fill="hsl(197.7 74% 52%)"/>
+        <rect x="49.15" y="49.84" width="9.93" height="7.72" fill="hsl(40.1 74% 52%)"/>
+        <rect x="49.15" y="58.56" width="9.93" height="4.44" fill="hsl(16.3 74% 52%)"/>
+        <rect x="60.09" y="49.84" width="2.91" height="13.16" fill="hsl(230.1 74% 52%)"/>
+      </svg>
+      <span class="eyebrow">GrandPerspective · PDS edition</span>
+    </div>
+
+    <div>
+      <h1>Your atproto repo, to scale</h1>
+      <p class="subtitle">Any AT&nbsp;Protocol repository as a treemap, sized by stored bytes.</p>
+    </div>
+
+    <div class="foot">
+      <span>read anyone&rsquo;s</span><span class="dot">—</span><span>edit your own</span>
+    </div>
+  </div>
+
+  <!-- Treemap: a squarified layout in hsl(H 74% 52%), the app's palette.
+       Areas are proportional the way the real tool draws them: one dominant
+       block, then progressively smaller collections. -->
+  <div class="map">
+    <div class="row" style="height:340px;">
+      <div class="b" style="flex:62; background:hsl(262.6 74% 52%);"></div>
+      <div class="col" style="flex:38;">
+        <div class="b" style="height:63%; background:hsl(282.7 74% 52%);"></div>
+        <div class="b" style="height:37%; background:hsl(177.6 74% 52%);"></div>
+      </div>
+    </div>
+    <div class="row" style="height:172px;">
+      <div class="b" style="flex:44; background:hsl(146.2 74% 52%);"></div>
+      <div class="b" style="flex:29; background:hsl(197.7 74% 52%);"></div>
+      <div class="col" style="flex:27;">
+        <div class="b" style="height:56%; background:hsl(40.1 74% 52%);"></div>
+        <div class="b" style="height:44%; background:hsl(16.3 74% 52%);"></div>
+      </div>
+    </div>
+    <div class="strip" style="height:100px;">
+      <div class="b" style="background:hsl(230.1 74% 52%);"></div>
+      <div class="b" style="background:hsl(300.0 74% 52%);"></div>
+      <div class="b" style="background:hsl(112.0 74% 52%);"></div>
+      <div class="col" style="flex:1;">
+        <div class="b" style="height:50%; background:hsl(88.0 74% 52%);"></div>
+        <div class="b" style="height:50%; background:hsl(340.0 74% 52%);"></div>
+      </div>
+      <div class="b" style="background:hsl(20.0 74% 52%);"></div>
+    </div>
+  </div>
+</body>
+</html>
