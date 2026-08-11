@@ -44,6 +44,24 @@ export const OAUTH_UNAVAILABLE_REASON =
 	'Sign in is unavailable on plain HTTP over LAN. Use the loopback URL on this Mac, or HTTPS.';
 
 /**
+ * Is the page currently completing an OAuth sign-in redirect? The atproto
+ * authorization server sends the user back with `state` (always) and `code`
+ * (on success) in the query string.
+ *
+ * `init()` runs on every page load, so a network failure inside it (the OAuth
+ * client-metadata fetch, session restore) should only be shown to the user
+ * when they are actually mid-sign-in. On an ordinary cold load reads work
+ * unauthenticated and a persistent "Failed to fetch" in the rail is just noise.
+ *
+ * @param {string|null|undefined} [search] `location.search`
+ * @returns {boolean}
+ */
+export function isOAuthCallback(search) {
+	const params = new URLSearchParams(search ?? '');
+	return params.has('code') || params.has('state');
+}
+
+/**
  * Did the authorization server actually grant repo writes?
  *
  * Read the granted scope from the SDK's token info, never from a guessed
@@ -144,7 +162,19 @@ export function createSessionStore() {
 					.catch(() => null);
 				handle = prof?.handle ?? did;
 			} catch (e) {
-				error = String(e?.message ?? e);
+				// init() runs automatically on every load. Only surface its failure
+				// when the page is actually completing a sign-in redirect -- on a
+				// cold load the app is read-only-usable without OAuth, and a failed
+				// client-metadata fetch (offline, CORS, localhost) must not show a
+				// standing "Failed to fetch" in the rail next to a repo that read
+				// and rendered fine. An explicit signIn() has its own catch that
+				// always reports, so the meaningful case is never swallowed.
+				const search = typeof location !== 'undefined' ? location.search : '';
+				if (isOAuthCallback(search)) {
+					error = String(e?.message ?? e);
+				} else if (typeof console !== 'undefined') {
+					console.warn('OAuth init unavailable (reads work unauthenticated):', e?.message ?? e);
+				}
 			}
 		},
 

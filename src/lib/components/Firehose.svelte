@@ -65,7 +65,7 @@
 		gap: 32px;
 		padding: 32px;
 		background: var(--ground);
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		overflow: hidden;
 	}
 	.stream {
@@ -91,7 +91,7 @@
 	.k, .b { text-align: right; }
 	.read { text-align: right; }
 	.phase {
-		font-family: 'Archivo', sans-serif;
+		font-family: 'Inter', sans-serif;
 		font-size: 9px;
 		font-weight: 700;
 		letter-spacing: 0.18em;
@@ -102,7 +102,7 @@
 	dl { margin: 0; display: flex; flex-direction: column; gap: 8px; }
 	dl > div { display: grid; grid-template-columns: auto 128px; gap: 16px; align-items: baseline; }
 	dt {
-		font-family: 'Archivo', sans-serif;
+		font-family: 'Inter', sans-serif;
 		font-size: 8.5px;
 		letter-spacing: 0.14em;
 		text-transform: uppercase;

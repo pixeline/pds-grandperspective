@@ -90,7 +90,7 @@ export function pngFilename(label, kind, w, h) {
 /**
  * Lay out and paint one target onto a detached canvas.
  *
- * A DOM canvas, not an OffscreenCanvas: the labels are set in IBM Plex Mono,
+ * A DOM canvas, not an OffscreenCanvas: the labels are set in JetBrains Mono,
  * and a detached canvas resolves document fonts.
  *
  * @param {object} o

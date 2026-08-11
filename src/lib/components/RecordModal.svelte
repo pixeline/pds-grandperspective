@@ -9,13 +9,14 @@
 	import { fmtBytes, fmtDate } from '$lib/repo/format.js';
 	import { tidToMs } from '$lib/atproto/tid.js';
 	import { appLinkFor } from '$lib/repo/appOf.js';
-	import { MICROBLOGGING_MAP, VIEWER_MAP } from '$lib/preferences.js';
+	import { alternativeAppsFor } from '$lib/repo/waypoints.js';
+	import { WAYPOINT_DESTINATIONS_DATA } from '@aturi.to/waypoints';
 	import { SvelteSet } from 'svelte/reactivity';
 
 	/** @type {{record: import('$lib/repo/types.js').ModalRecord | null, did: string | null,
 	 *          handle: string | null, agent: any, canWrite: boolean, isOwnRepo: boolean,
 	 *          onclose?: () => void, onchanged?: (e: {action: 'updated'|'deleted', record: any, value?: any}) => void,
-	 *          microblogging?: string, viewer?: string}} */
+	 *          viewer?: string, collections?: string[], favorites?: string[]}} */
 	let {
 		record = null,
 		did = null,
@@ -25,9 +26,45 @@
 		isOwnRepo = false,
 		onclose,
 		onchanged,
-		microblogging = $bindable('bsky'),
-		viewer = $bindable('pdsls.dev')
+		viewer = 'aturiExplore',
+		collections = [],
+		favorites = []
 	} = $props();
+
+	// The set of every collection NSID in this repo, used by waypoints'
+	// `waypointActivity` to hide apps that have no records here. Built once per
+	// repo (the `collections` prop changes only on a new read).
+	const repoCollections = $derived(new Set(collections));
+
+	// PROTOTYPE: the waypoints-driven "Open as…" list. Replaces the single
+	// owning-app button below when it yields anything; the appLink fallback
+	// (reverse-DNS owning app) still covers long-tail collections no waypoint
+	// claims. `openMenu` toggles the dropdown.
+	let openMenu = $state(false);
+	const altApps = $derived(
+		record
+			? alternativeAppsFor({
+					col: record.col,
+					did,
+					rkey: record.aggregate ? null : record.rkey,
+					aggregate: record.aggregate,
+					value: record.aggregate ? undefined : record.value,
+					repoCollections,
+					favorites
+				})
+			: { primary: [], more: [], all: [], defaultId: null }
+	);
+	// The app the CTA opens directly: the owner of this record's lexicon, or the
+	// user's matching favorite (see alternativeAppsFor). The chevron beside it
+	// opens the full list to switch.
+	const defaultApp = $derived(altApps.all.find((a) => a.id === altApps.defaultId) ?? null);
+	// Everything except the default, for the switch menu (favorites first).
+	const otherApps = $derived(altApps.all.filter((a) => a.id !== altApps.defaultId));
+	// Close the menu whenever the record changes.
+	$effect(() => {
+		void record;
+		openMenu = false;
+	});
 
 	let editing = $state(false);
 	let confirming = $state(false);
@@ -246,77 +283,38 @@
 		a.remove();
 	}
 
+	// The raw record explorer for the "Examine" button, built from the user's
+	// chosen viewer (a devTools waypoint). The catalog's own `getUrl` handles
+	// both a single record and an aggregate (collection-level, no rkey), so we
+	// no longer hand-build these URLs.
 	const viewerLink = $derived.by(() => {
 		if (!record || !did) return null;
-		const choice = VIEWER_MAP[viewer] ?? VIEWER_MAP['pdsls.dev'];
-		const path = record.aggregate ? `${did}/${record.col}` : `${did}/${record.col}/${record.rkey}`;
-		if (choice.domain === 'aturi.to') {
-			return {
-				...choice,
-				url: `https://aturi.to/explore/${path}`
-			};
+		const meta = WAYPOINT_DESTINATIONS_DATA[viewer] ?? WAYPOINT_DESTINATIONS_DATA['aturiExplore'];
+		if (!meta) return null;
+		const rkey = record.aggregate ? undefined : record.rkey;
+		const url = meta.getUrl(did, record.col, rkey ?? undefined, did);
+		if (!url) return null;
+		let domain;
+		try {
+			domain = new URL(url).hostname.replace(/^www\./, '');
+		} catch {
+			return null;
 		}
-		return {
-			...choice,
-			url: `https://pdsls.dev/at://${path}`
-		};
+		return { domain, label: meta.name, url };
 	});
 
-	// The app that owns this record's lexicon, and the best URL to open on it
-	// (deep link for the four documented Bluesky shapes, domain root
-	// otherwise) -- or, when the record's value carries a `subject.uri` (a
-	// like or repost pointing at the post it's about), the link is resolved
-	// from THAT subject instead, so the button opens what the record is
-	// about rather than a home page.
-	//
-	// If a microblogging preference is set and the record's collection is a
-	// Bluesky collection (app.bsky.*), override the domain with the preferred
-	// microblogging app.
+	// The app that owns this record's lexicon, via reverse-DNS -- the fallback
+	// shown ONLY when the waypoints catalog knows no alternative app for this
+	// record (a long-tail collection). This is the unknown-lexicon coverage
+	// waypoints alone would lose. Deep link for the four documented Bluesky
+	// shapes, domain root otherwise; subject-followed for likes/reposts.
 	//
 	// An aggregate block has no single record behind it, so this button is
-	// dropped entirely rather than shown pointing at a domain root -- for a
-	// collection like app.bsky.feed.like that would be "Open on bsky.app"
-	// landing on a home feed, which is not what "open on the app" promises
-	// for a whole collection. `null` here (not "compute it anyway with no
-	// rkey/value") is what makes the button vanish below.
-	const appLink = $derived.by(() => {
-		const base = record && !record.aggregate ? appLinkFor(record.col, did, record.rkey, record.value) : null;
-		if (!base) return null;
-		
-		// Override with preferred microblogging app if this is a Bluesky collection
-		const preferred = MICROBLOGGING_MAP[microblogging];
-		if (preferred && base.domain === 'bsky.app') {
-			const subject = record?.value?.subject;
-			const subjectUri =
-				typeof subject === 'string'
-					? subject
-					: subject && typeof subject === 'object' && typeof subject.uri === 'string'
-						? subject.uri
-						: null;
-			const atUri =
-				typeof subjectUri === 'string' && subjectUri.startsWith('at://')
-					? subjectUri
-					: record?.rkey
-						? `at://${did}/${record.col}/${record.rkey}`
-						: null;
-
-			if (preferred.route === 'at-uri-path' && atUri) {
-				return {
-					...base,
-					domain: preferred.domain,
-					label: preferred.label,
-					url: `https://${preferred.domain}/${atUri}`
-				};
-			}
-			return {
-				...base,
-				domain: preferred.domain,
-				label: preferred.label,
-				url: base.url.replace('bsky.app', preferred.domain)
-			};
-		}
-		return base;
-	});
+	// dropped entirely rather than shown pointing at a domain root. `null` here
+	// is what makes the button vanish below.
+	const appLink = $derived(
+		record && !record.aggregate ? appLinkFor(record.col, did, record.rkey, record.value) : null
+	);
 
 	/** @param {string} domain */
 	function iconSourcesFor(domain) {
@@ -397,6 +395,19 @@
 	function openApp() {
 		if (!appLink) return;
 		openExternal(appLink.url);
+	}
+
+	/** @param {string} url */
+	function openAlt(url) {
+		openMenu = false;
+		openExternal(url);
+	}
+
+	/** Hide a favicon that fails to load rather than show a broken-image glyph.
+	 * @param {Event} e */
+	function hideIcon(e) {
+		const img = /** @type {HTMLImageElement} */ (e.currentTarget);
+		img.style.display = 'none';
 	}
 </script>
 
@@ -483,7 +494,68 @@
 				</button>
 			{/if}
 
-			{#if appLink}
+			{#if defaultApp}
+				<!-- Split CTA: the main button opens the app that owns this record's
+				     lexicon (or the user's matching favorite); the chevron opens the
+				     list to switch to any other app that can render it. -->
+				<div class="open-as">
+					<button
+						class="ghost app-link split-main"
+						onclick={() => openAlt(defaultApp.url)}
+						title={`Open on ${defaultApp.domain}`}
+					>
+						<img
+							class="app-icon"
+							src={`https://${defaultApp.domain}/favicon.ico`}
+							alt=""
+							aria-hidden="true"
+							onerror={hideIcon}
+						/>
+						Open on {defaultApp.name}
+					</button>
+					{#if otherApps.length > 0}
+						<button
+							class="ghost split-chev"
+							aria-haspopup="menu"
+							aria-expanded={openMenu}
+							aria-label="Open on a different app"
+							onclick={() => (openMenu = !openMenu)}
+						>
+							{openMenu ? '▴' : '▾'}
+						</button>
+					{/if}
+
+					{#if openMenu}
+						<div class="menu" role="menu">
+							{#each otherApps as app (app.id)}
+								<button
+									class="menu-item"
+									role="menuitem"
+									onclick={() => openAlt(app.url)}
+									title={`Open on ${app.domain}`}
+								>
+									<img
+										class="app-icon"
+										src={`https://${app.domain}/favicon.ico`}
+										alt=""
+										aria-hidden="true"
+										onerror={hideIcon}
+									/>
+									<span class="mi-name">{app.name}</span>
+									{#if app.favorite}
+										<span class="mi-tag">favorite</span>
+									{:else}
+										<span class="mi-domain">{app.domain}</span>
+									{/if}
+								</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{:else if appLink}
+				<!-- Fallback for a collection no waypoint claims: the reverse-DNS
+				     owning app from appOf.js. This is the unknown-lexicon coverage
+				     that waypoints alone would lose. -->
 				<button
 					class="ghost app-link"
 					onclick={openApp}
@@ -555,10 +627,10 @@
 		font-size: 14px;
 		font-weight: 800;
 		letter-spacing: -0.02em;
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		overflow-wrap: anywhere;
 	}
-	.meta { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 28px; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; }
+	.meta { margin: 0; display: flex; flex-wrap: wrap; gap: 6px 28px; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
 	.meta > div { display: flex; gap: 8px; }
 	dt { color: var(--ink-soft); }
 	dd { margin: 0; }
@@ -578,7 +650,7 @@
 		flex: 1 1 220px;
 		min-height: 0;
 		overflow: auto;
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 11px;
 		line-height: 1.5;
 		background: var(--ground);
@@ -594,7 +666,7 @@
 	footer { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
 	footer .ro { margin-left: auto; text-align: right; }
 	button {
-		font-family: 'Archivo', sans-serif;
+		font-family: 'Inter', sans-serif;
 		font-size: 10px;
 		font-weight: 700;
 		letter-spacing: 0.12em;
@@ -608,6 +680,58 @@
 	button.ghost { background: transparent; color: var(--ink); }
 	button.app-link { display: inline-flex; align-items: center; gap: 6px; }
 	.app-icon { width: 16px; height: 16px; border-radius: 0; box-shadow: none; object-fit: contain; }
+
+	/* PROTOTYPE: "Open as…" dropdown. Opens upward (footer sits at the bottom of
+	   the modal). Flat borders only -- no radius/shadow/gradient (style.spec.js). */
+	.open-as { position: relative; display: inline-flex; }
+	/* Split control: main + chevron read as one button, divided by a single
+	   rule (the main button drops its right border so the chevron's left border
+	   is the only divider). */
+	.split-main { border-right-width: 0; }
+	.split-chev { padding-left: 9px; padding-right: 9px; }
+	.menu {
+		position: absolute;
+		bottom: calc(100% + 4px);
+		left: 0;
+		z-index: 5;
+		min-width: 220px;
+		max-height: 320px;
+		overflow-y: auto;
+		background: var(--paper);
+		border: 1px solid var(--ink);
+		display: flex;
+		flex-direction: column;
+	}
+	.menu-item {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0;
+		text-transform: none;
+		text-align: left;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 10px;
+		border: 0;
+		background: transparent;
+		color: var(--ink);
+	}
+	.menu-item:hover { background: var(--ground); }
+	.menu-item .mi-name { font-weight: 600; }
+	.menu-item .mi-tag {
+		margin-left: auto;
+		font-size: 9px;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--ink-soft);
+	}
+	.menu-item .mi-domain {
+		margin-left: auto;
+		font-size: 9px;
+		color: var(--ink-soft);
+	}
+	.menu-rule { height: 0; border-top: 1px solid var(--rule); }
 	button.danger { background: var(--paper); color: var(--ink); border-width: 2px; }
 	button:disabled { opacity: 0.35; cursor: default; }
 	.x { background: transparent; color: var(--ink-soft); border: 0; padding: 4px; }

@@ -20,7 +20,7 @@
 		gap: 8px;
 		flex-wrap: wrap;
 		align-items: baseline;
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 9.5px;
 		line-height: 1.5;
 		color: var(--ink-soft);

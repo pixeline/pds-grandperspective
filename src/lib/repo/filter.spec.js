@@ -10,7 +10,7 @@ const RECORDS = [
 	{ col: 'my.custom.rel', rkey: 'ddd', ts: T('2026-06-01'), bytes: 40, value: { nested: { deep: 'needle' } } }
 ];
 
-const none = { hidden: new Set(), from: null, to: null, query: '' };
+const none = { hidden: new Set(), only: new Set(), from: null, to: null, query: '' };
 
 describe('applyFilters', () => {
 	it('passes everything through when nothing is set', () => {
@@ -111,6 +111,31 @@ describe('applyFilters', () => {
 	it('survives a record with no value', () => {
 		const out = applyFilters([{ col: 'a.b.c', rkey: 'x', ts: 0, bytes: 1 }], { ...none, query: 'zzz' });
 		expect(out.matched).toBe(0);
+	});
+
+	// The app filter: `only` is a show-list of namespace prefixes.
+	it('restricts to records under an `only` prefix (dot-boundary respected)', () => {
+		const out = applyFilters(RECORDS, { ...none, only: new Set(['app.bsky']) });
+		// app.bsky.feed.post + app.bsky.feed.like, but NOT app.bskyfoo.thing
+		expect(out.records.map((r) => r.rkey).sort()).toEqual(['aaa', 'bbb']);
+	});
+
+	it('unions multiple `only` prefixes', () => {
+		const out = applyFilters(RECORDS, { ...none, only: new Set(['app.bsky.feed.post', 'my.custom.rel']) });
+		expect(out.records.map((r) => r.rkey).sort()).toEqual(['aaa', 'ddd']);
+	});
+
+	it('composes `only` with `hidden` (only shows, hidden then removes)', () => {
+		const out = applyFilters(RECORDS, {
+			...none,
+			only: new Set(['app.bsky']),
+			hidden: new Set(['app.bsky.feed.like'])
+		});
+		expect(out.records.map((r) => r.rkey)).toEqual(['aaa']);
+	});
+
+	it('treats an empty `only` set as no restriction', () => {
+		expect(applyFilters(RECORDS, { ...none, only: new Set() }).matched).toBe(4);
 	});
 
 	// ~25 records in a real repo have no decodable TID and no createdAt --

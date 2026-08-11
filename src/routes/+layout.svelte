@@ -44,8 +44,15 @@
 	:global(body) {
 		background: var(--ground);
 		color: var(--ink);
-		font-family: 'Archivo', system-ui, sans-serif;
+		font-family: 'Inter', system-ui, sans-serif;
 		overflow: hidden;
+		/* Grayscale antialiasing everywhere. Without this, WebKit uses subpixel
+		   rendering that makes light-text-on-dark elements (inverted chips, the
+		   selected filter, primary buttons) look noticeably heavier than the same
+		   text on a light background -- the "weird antialiasing" seen on the
+		   selected app chip. Grayscale keeps weight consistent across inversions. */
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
 	}
 	@media (prefers-reduced-motion: reduce) {
 		:global(*) {

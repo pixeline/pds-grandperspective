@@ -11,6 +11,7 @@ export function defaultState() {
 		handle: '',
 		weigh: 'bytes',
 		hidden: new Set(),
+		only: new Set(),
 		from: null,
 		to: null,
 		query: ''
@@ -25,6 +26,7 @@ export function toHash(s) {
 	if (s.handle) q.set('h', s.handle);
 	if (s.weigh && s.weigh !== 'bytes') q.set('weigh', s.weigh);
 	if (s.hidden?.size) q.set('hide', [...s.hidden].sort().join(','));
+	if (s.only?.size) q.set('only', [...s.only].sort().join(','));
 	if (s.from != null) q.set('from', isoDay(s.from));
 	if (s.to != null) q.set('to', isoDay(s.to));
 	if (s.query?.trim()) q.set('q', s.query.trim());
@@ -45,6 +47,9 @@ export function fromHash(hash) {
 	// the link they shared.
 	const hide = q.get('hide');
 	if (hide) s.hidden = new Set(hide.split(',').filter(Boolean));
+
+	const only = q.get('only');
+	if (only) s.only = new Set(only.split(',').filter(Boolean));
 
 	for (const k of /** @type {const} */ (['from', 'to'])) {
 		const raw = q.get(k);

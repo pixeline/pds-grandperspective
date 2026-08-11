@@ -30,6 +30,12 @@ describe('urlstate', () => {
 		expect([...fromHash(h).hidden]).toEqual(['app.bsky.feed.like']);
 	});
 
+	it('round-trips the app filter (`only`) through the hash key `only`', () => {
+		const h = toHash({ ...defaultState(), only: new Set(['sh.tangled', 'social.popfeed']) });
+		expect(h).toContain('only=sh.tangled%2Csocial.popfeed');
+		expect([...fromHash(h).only].sort()).toEqual(['sh.tangled', 'social.popfeed']);
+	});
+
 	it('drops the retired stack keys instead of restoring them', () => {
 		const back = fromHash('#h=a.test&gap=90&twist=16&cap=4000&v=stack&ax=-24');
 		expect(back.handle).toBe('a.test');

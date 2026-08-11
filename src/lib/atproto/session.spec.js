@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
-import { hasRepoWrite, oauthSupported, OAUTH_UNAVAILABLE_REASON, SCOPE } from './session.svelte.js';
+import {
+	hasRepoWrite,
+	oauthSupported,
+	OAUTH_UNAVAILABLE_REASON,
+	SCOPE,
+	isOAuthCallback
+} from './session.svelte.js';
 
 describe('SCOPE', () => {
 	// repo:* is the full wildcard, which the permission spec allows; partial
@@ -41,6 +47,22 @@ describe('hasRepoWrite', () => {
 		expect(hasRepoWrite(undefined)).toBe(false);
 		expect(hasRepoWrite(null)).toBe(false);
 		expect(hasRepoWrite('')).toBe(false);
+	});
+});
+
+describe('isOAuthCallback', () => {
+	// init() runs on every page load; its failures should only surface as a
+	// user-facing error when the page is actually completing a sign-in redirect.
+	it('is true when the URL carries an OAuth callback (state and/or code)', () => {
+		expect(isOAuthCallback('?state=abc&code=xyz')).toBe(true);
+		expect(isOAuthCallback('?state=abc')).toBe(true);
+		expect(isOAuthCallback('?code=xyz&iss=https://pds.example')).toBe(true);
+	});
+
+	it('is false on a normal cold load (no sign-in in progress)', () => {
+		expect(isOAuthCallback('')).toBe(false);
+		expect(isOAuthCallback('?foo=bar')).toBe(false);
+		expect(isOAuthCallback(undefined)).toBe(false);
 	});
 });
 

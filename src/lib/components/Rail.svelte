@@ -4,10 +4,11 @@
 	import Footer from './Footer.svelte';
 	import Preferences from './Preferences.svelte';
 	import { fmtBytes, fmtNum, fmtPct } from '$lib/repo/format.js';
+	import { appFilterOptions } from '$lib/repo/waypoints.js';
 
 	let {
 		handle = $bindable(''),
-		filters = $bindable({ hidden: new Set(), from: null, to: null, query: '' }),
+		filters = $bindable({ hidden: new Set(), only: new Set(), from: null, to: null, query: '' }),
 		busy = false,
 		status = 'idle',
 		stats = null,
@@ -62,13 +63,31 @@
 		filters = { ...filters, hidden: new Set() };
 	}
 
+	// App filter: the namespaces present in this repo that a catalog app claims
+	// (e.g. Tangled, Popfeed, Bluesky). Selecting some restricts the treemap to
+	// their collections via `filters.only`. Derived from the legend, which is
+	// the set of collections in the current read.
+	const appOptions = $derived(appFilterOptions(legend.map(([c]) => c)));
+
+	/** @param {string} prefix */
+	function toggleApp(prefix) {
+		const next = new Set(filters.only ?? []);
+		if (next.has(prefix)) next.delete(prefix);
+		else next.add(prefix);
+		filters = { ...filters, only: next };
+	}
+
 	const hasActiveFilters = $derived(
-		filters.hidden.size > 0 || filters.from != null || filters.to != null || filters.query.trim() !== ''
+		filters.hidden.size > 0 ||
+			(filters.only?.size ?? 0) > 0 ||
+			filters.from != null ||
+			filters.to != null ||
+			filters.query.trim() !== ''
 	);
 
 	function clearFilters() {
 		queryInput = '';
-		filters = { ...filters, hidden: new Set(), from: null, to: null, query: '' };
+		filters = { ...filters, hidden: new Set(), only: new Set(), from: null, to: null, query: '' };
 	}
 
 	// Search costs over a second end-to-end on a large repository, so the input
@@ -186,6 +205,25 @@
 				</div>
 			</label>
 		</div>
+		{#if appOptions.length}
+			<div class="apps">
+				<span class="apps-lbl">Show only these apps</span>
+				<div class="chips">
+					{#each appOptions as opt (opt.prefix)}
+						<button
+							type="button"
+							class="chip"
+							class:on={filters.only?.has(opt.prefix)}
+							aria-pressed={filters.only?.has(opt.prefix) ?? false}
+							onclick={() => toggleApp(opt.prefix)}
+							title={`${opt.label} — ${opt.collections.length} collection${opt.collections.length === 1 ? '' : 's'} (${opt.prefix}.*)`}
+						>
+							{opt.label}
+						</button>
+					{/each}
+				</div>
+			</div>
+		{/if}
 		{#if hasActiveFilters}
 			<button class="ghost sm" onclick={clearFilters}>Clear filters</button>
 		{/if}
@@ -333,7 +371,7 @@
 		gap: 8px;
 	}
 	.fold-summary {
-		font-family: 'Archivo', sans-serif;
+		font-family: 'Inter', sans-serif;
 		font-size: 10px;
 		font-weight: 700;
 		letter-spacing: 0.12em;
@@ -350,7 +388,7 @@
 	.grp { display: flex; flex-direction: column; gap: 8px; }
 	.lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-soft); }
 	button {
-		font-family: 'Archivo', sans-serif;
+		font-family: 'Inter', sans-serif;
 		font-size: 10px;
 		font-weight: 700;
 		letter-spacing: 0.12em;
@@ -367,7 +405,7 @@
 	.row { display: flex; gap: 6px; }
 	.row > * { flex: 1; }
 	.txt {
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 11px;
 		padding: 8px;
 		border: 1px solid var(--rule);
@@ -379,7 +417,7 @@
 	.dt span { font-size: 8.5px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-soft); }
 	.dtrow { display: flex; align-items: stretch; gap: 3px; }
 	.dtrow input {
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 10.5px;
 		padding: 6px;
 		border: 1px solid var(--rule);
@@ -399,7 +437,34 @@
 		border: 1px solid var(--rule);
 	}
 	.clr:hover { color: var(--ink); border-color: var(--ink); }
-	table { width: 100%; border-collapse: collapse; font-family: 'IBM Plex Mono', monospace; font-size: 10.5px; }
+
+	/* App filter: flat toggle chips. No radius/shadow/gradient (style.spec.js). */
+	.apps { margin-top: 8px; }
+	.apps-lbl {
+		display: block;
+		font-size: 10px;
+		color: var(--ink-soft);
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		margin-bottom: 4px;
+	}
+	.chips { display: flex; flex-wrap: wrap; gap: 4px; }
+	.chip {
+		font-family: 'JetBrains Mono', monospace;
+		font-size: 10px;
+		padding: 3px 7px;
+		border: 1px solid var(--rule);
+		background: var(--paper);
+		color: var(--ink);
+		cursor: pointer;
+	}
+	.chip:hover { background: var(--ground); }
+	.chip.on {
+		background: var(--ink);
+		color: var(--paper);
+		border-color: var(--ink);
+	}
+	table { width: 100%; border-collapse: collapse; font-family: 'JetBrains Mono', monospace; font-size: 10.5px; }
 	td { padding: 2px 0; vertical-align: top; }
 	td.k { color: var(--ink-soft); }
 	td.v { text-align: right; font-weight: 500; }
@@ -425,7 +490,7 @@
 		grid-template-columns: 11px 1fr auto;
 		gap: 7px;
 		align-items: center;
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 10px;
 		background: transparent;
 		border: 0;
@@ -451,7 +516,7 @@
 	.leg-main b { font-weight: 500; color: var(--ink-soft); }
 	.only {
 		flex: none;
-		font-family: 'IBM Plex Mono', monospace;
+		font-family: 'JetBrains Mono', monospace;
 		font-size: 8.5px;
 		letter-spacing: 0.08em;
 		text-transform: uppercase;
@@ -462,7 +527,7 @@
 		cursor: pointer;
 	}
 	.only:hover { color: var(--ink); }
-	.errs { font-family: 'IBM Plex Mono', monospace; font-size: 10px; color: var(--ink-soft); }
+	.errs { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--ink-soft); }
 	.e { display: flex; justify-content: space-between; gap: 8px; }
 	hr { border: 0; border-top: 1px solid var(--rule); margin: 0; }
 	.note { font-size: 10px; line-height: 1.45; color: var(--ink-soft); margin: 0; }
