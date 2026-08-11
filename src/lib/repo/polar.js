@@ -15,7 +15,11 @@ export const RAYS = RAY_ORDER.map((key, i) => ({
 
 const LOG_MAX = Math.log10(10000); // the edge is 10k records
 
-/** count → 0..1 radius fraction on a fixed log scale (shared across accounts). */
+/** count → 0..1 radius fraction on a fixed log scale (shared across accounts).
+ *  Uses log10(count) directly (not count+1) so that the labelled rings sit at exact
+ *  quarter-radii: 10→0.25, 100→0.5, 1000→0.75, 10000→1. The honest consequence is
+ *  that a single record (count===1, log10(1)=0) plots at dead centre, same as zero.
+ *  This is typical: nearly every account has exactly one app.bsky.actor.profile. */
 export function radiusFraction(count) {
 	if (count === 0) return 0;
 	const f = Math.log10(count) / LOG_MAX;

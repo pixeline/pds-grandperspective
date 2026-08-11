@@ -16,6 +16,9 @@ describe('radiusFraction (fixed log)', () => {
 		expect(radiusFraction(100)).toBeGreaterThan(radiusFraction(10));
 		expect(radiusFraction(10)).toBeCloseTo(0.25, 2);
 	});
+	it('collapses a single record to the centre (log10(1)=0), same as zero', () => {
+		expect(radiusFraction(1)).toBe(0);
+	});
 });
 
 describe('raySaturation (recency)', () => {
