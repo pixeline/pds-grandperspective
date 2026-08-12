@@ -80,10 +80,14 @@
   // in the actor.profile record already in `data.records`; its ref is a CID
   // (base32, from the CAR's dag-cbor). getBlob serves the image directly -- an
   // <img> renders it regardless of CORS, unlike a fetch.
+  const profileRecord = $derived(
+    data ? data.records.find((r) => r.col === "app.bsky.actor.profile") : null,
+  );
+  const displayName = $derived(profileRecord?.value?.displayName ?? null);
+
   const avatarUrl = $derived.by(() => {
     if (!data) return null;
-    const prof = data.records.find((r) => r.col === "app.bsky.actor.profile");
-    const av = prof?.value?.avatar;
+    const av = profileRecord?.value?.avatar;
     if (!av) return null;
     // The blob's ref can arrive as a live CID instance (CAR/dag-cbor read), a
     // dag-json {'/': cid}, or a lexicon {$link: cid} (listRecords fallback).
@@ -514,6 +518,7 @@
       hueOf={hues?.hueOf}
       vector={behavior}
       avatar={avatarUrl}
+      {displayName}
       {session}
       open={railOpen}
       ondraw={draw}
