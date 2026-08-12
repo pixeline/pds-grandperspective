@@ -8,6 +8,8 @@
  * Pure: a function of records already in memory after a read. No network.
  */
 
+import { appDomainOf } from './appOf.js';
+
 /** Canonical ray order — the source of truth for the count keys here and for
  *  the geometry (angles, hues) in polar.js. */
 export const RAY_ORDER = [
@@ -71,8 +73,24 @@ export function behaviorVector(records) {
 	const lastActive = Object.fromEntries(RAY_ORDER.map((k) => [k, null]));
 	let unclassified = 0;
 	const unclassifiedCols = new Set();
+	// Verification records are vouches this account issued for others' identity
+	// (the trusted-verifier mechanism). They are a role, not one of the seven
+	// activity modes, so they are counted on their own rather than as a ray or
+	// as unclassified noise.
+	let verifications = 0;
+	// Distinct atproto apps the account has any record in (reverse-DNS authority
+	// of each collection). Breadth across apps is the "explorer" signal, separate
+	// from how much the account does in any one of them.
+	const appDomains = new Set();
 
 	for (const r of records) {
+		const app = appDomainOf(r.col);
+		if (app) appDomains.add(app);
+
+		if (r.col === 'app.bsky.graph.verification') {
+			verifications++;
+			continue;
+		}
 		const ray = classify(r);
 		if (ray == null) {
 			unclassified++;
@@ -89,7 +107,9 @@ export function behaviorVector(records) {
 		...counts,
 		unclassified,
 		unclassifiedCols: [...unclassifiedCols].sort(),
-		lastActive
+		lastActive,
+		verifications,
+		apps: appDomains.size
 	};
 }
 

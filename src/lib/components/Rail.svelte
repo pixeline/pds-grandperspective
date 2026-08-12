@@ -25,6 +25,7 @@
 		autoHidden = null,
 		hueOf,
 		vector = null,
+		avatar = null,
 		session = null,
 		// Narrow viewports only: below the breakpoint at the bottom of this
 		// file the rail stops being a column of the layout and becomes an
@@ -158,7 +159,7 @@
 	</div>
 
 	{#if vector}
-		<PolarProfile {vector} />
+		<PolarProfile {vector} {avatar} />
 	{/if}
 
 	<hr />

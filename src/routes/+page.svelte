@@ -76,6 +76,31 @@
   const connection = $derived(getConnection());
   const behavior = $derived(data ? behaviorVector(data.records) : null);
 
+  // The account's own avatar, shown beside its behavioural type. The blob lives
+  // in the actor.profile record already in `data.records`; its ref is a CID
+  // (base32, from the CAR's dag-cbor). getBlob serves the image directly -- an
+  // <img> renders it regardless of CORS, unlike a fetch.
+  const avatarUrl = $derived.by(() => {
+    if (!data) return null;
+    const prof = data.records.find((r) => r.col === "app.bsky.actor.profile");
+    const av = prof?.value?.avatar;
+    if (!av) return null;
+    // The blob's ref can arrive as a live CID instance (CAR/dag-cbor read), a
+    // dag-json {'/': cid}, or a lexicon {$link: cid} (listRecords fallback).
+    // Serialising and pulling the base32 CIDv1 out covers every shape.
+    let cid = null;
+    try {
+      const m = JSON.stringify(av).match(/ba[a-z2-7]{20,}/i);
+      if (m) cid = m[0];
+    } catch {}
+    if (!cid) {
+      const s = (av.ref ?? av)?.toString?.();
+      if (typeof s === "string" && /^ba[a-z2-7]{20,}$/i.test(s)) cid = s;
+    }
+    if (!cid) return null;
+    return `${data.pds}/xrpc/com.atproto.sync.getBlob?did=${encodeURIComponent(data.did)}&cid=${encodeURIComponent(cid)}`;
+  });
+
   // The collection auto-hidden at the end of the read that produced `data`
   // (see draw()), and its share of that read's total bytes -- or null if
   // nothing was dominant enough, or the read suppressed auto-hide because an
@@ -488,6 +513,7 @@
       autoHidden={autoHiddenNotice}
       hueOf={hues?.hueOf}
       vector={behavior}
+      avatar={avatarUrl}
       {session}
       open={railOpen}
       ondraw={draw}

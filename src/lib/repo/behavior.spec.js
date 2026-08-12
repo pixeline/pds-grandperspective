@@ -66,6 +66,28 @@ describe('behaviorVector', () => {
 		expect(v.lastActive.create).toBeNull();
 	});
 
+	it('counts issued verifications on their own, not as a ray or unclassified', () => {
+		const v = behaviorVector(recs([
+			['app.bsky.graph.verification'],
+			['app.bsky.graph.verification'],
+			['app.bsky.feed.like']
+		]));
+		expect(v.verifications).toBe(2);
+		expect(v.react).toBe(1);
+		expect(v.unclassified).toBe(0);
+	});
+
+	it('counts distinct atproto apps as the explorer signal', () => {
+		const v = behaviorVector(recs([
+			['app.bsky.feed.post'],
+			['app.bsky.feed.like'], // still bsky.app
+			['sh.tangled.repo'],
+			['com.whtwnd.blog.entry'],
+			['pub.leaflet.document']
+		]));
+		expect(v.apps).toBe(4); // bsky.app, tangled.sh, whtwnd.com, leaflet.pub
+	});
+
 	it('is all-zero for an empty repo', () => {
 		const v = behaviorVector([]);
 		expect(RAY_ORDER.every((k) => v[k] === 0)).toBe(true);
