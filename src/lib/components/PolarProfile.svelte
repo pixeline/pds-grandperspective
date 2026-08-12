@@ -183,12 +183,12 @@
 </section>
 
 <style>
+	/* Spacing from neighbours is the rail's job (its uniform column gap); a
+	   self-padding + border-top here only doubled the gap unevenly. */
 	.polar {
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		padding: 12px 0;
-		border-top: 1px solid var(--ink-soft);
 	}
 	.cap { display: flex; align-items: center; justify-content: space-between; }
 	.lbl {
