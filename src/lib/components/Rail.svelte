@@ -4,6 +4,7 @@
 	import Footer from './Footer.svelte';
 	import Preferences from './Preferences.svelte';
 	import PolarProfile from './PolarProfile.svelte';
+	import ProfileCard from './ProfileCard.svelte';
 	import { fmtBytes, fmtNum, fmtPct } from '$lib/repo/format.js';
 	import { appFilterOptions } from '$lib/repo/waypoints.js';
 
@@ -26,6 +27,7 @@
 		hueOf,
 		vector = null,
 		avatar = null,
+		displayName = null,
 		session = null,
 		// Narrow viewports only: below the breakpoint at the bottom of this
 		// file the rail stops being a column of the layout and becomes an
@@ -158,8 +160,9 @@
 		{/if}
 	</div>
 
+	<ProfileCard {avatar} name={displayName} />
 	{#if vector}
-		<PolarProfile {vector} {avatar} />
+		<PolarProfile {vector} />
 	{/if}
 
 	<hr />

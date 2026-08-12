@@ -5,8 +5,8 @@
 	import { dominantType, describeType, RAY_ORDER } from '$lib/repo/behavior.js';
 	import { fmtNum } from '$lib/repo/format.js';
 
-	/** @type {{ vector: any, size?: number, avatar?: string | null }} */
-	let { vector = null, size = 220, avatar = null } = $props();
+	/** @type {{ vector: any, size?: number }} */
+	let { vector = null, size = 220 } = $props();
 
 	// An account in this many distinct atproto apps or more is scouting the wider
 	// atmosphere, not just living in one app.
@@ -159,19 +159,7 @@
 			{/each}
 		</div>
 
-		<div class="headline">
-			{#if avatar}
-				<img
-					class="avatar"
-					src={avatar}
-					alt=""
-					width="40"
-					height="40"
-					onerror={(e) => (e.currentTarget.style.display = 'none')}
-				/>
-			{/if}
-			<span class="type">{type.label}</span>
-		</div>
+		<p class="type">{type.label}</p>
 		{#if type.ray}
 			<p class="type-desc">{describeType(type.ray)}</p>
 		{/if}
@@ -237,23 +225,9 @@
 		pointer-events: none;
 		white-space: nowrap;
 	}
-	.headline {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 10px;
-	}
-	/* A disc: the one deliberate exception to the no-rounded rule, because a
-	   cropped profile photo reads as a face, not as decorative rounding. */
-	.avatar {
-		width: 40px;
-		height: 40px;
-		object-fit: cover;
-		display: block;
-		border: 1px solid var(--ink-soft);
-		border-radius: 50%;
-	}
 	.type {
+		margin: 0;
+		text-align: center;
 		font-family: 'JetBrains Mono', monospace;
 		font-size: 15px;
 		color: var(--ink);
