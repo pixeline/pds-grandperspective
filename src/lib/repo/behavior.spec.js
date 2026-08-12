@@ -73,27 +73,42 @@ describe('behaviorVector', () => {
 	});
 });
 
-import { dominantType } from './behavior.js';
+import { dominantType, describeType } from './behavior.js';
 
 describe('dominantType', () => {
 	const zero = behaviorVector([]);
 
-	it('names the busiest ray', () => {
+	it('flags the over-indexed mode, not the raw plurality', () => {
+		// likes are the raw plurality, but posting sits far above its baseline
 		const v = { ...zero, react: 900, create: 100 };
-		expect(dominantType(v)).toEqual({ ray: 'react', label: 'Listener' });
-	});
-
-	it('breaks ties by ray order (create before react)', () => {
-		const v = { ...zero, create: 5, react: 5 };
 		expect(dominantType(v)).toEqual({ ray: 'create', label: 'Broadcaster' });
 	});
 
-	it('calls an identity-led repo a Newcomer', () => {
+	it('calls an all-likes account a Listener', () => {
+		const v = { ...zero, react: 1000 };
+		expect(dominantType(v)).toEqual({ ray: 'react', label: 'Listener' });
+	});
+
+	it('calls a baseline-shaped account a Generalist', () => {
+		// counts in the same proportions as TYPICAL → every mode indexes ~1.0
+		const v = { ...zero, react: 720, connect: 130, create: 55, amplify: 45, converse: 30, curate: 10, identity: 10 };
+		expect(dominantType(v)).toEqual({ ray: 'generalist', label: 'Generalist' });
+	});
+
+	it('calls an identity-only repo a Newcomer', () => {
 		const v = { ...zero, identity: 1 };
 		expect(dominantType(v)).toEqual({ ray: 'identity', label: 'Newcomer' });
 	});
 
 	it('has no type for an empty repo', () => {
 		expect(dominantType(zero)).toEqual({ ray: null, label: '—' });
+	});
+});
+
+describe('describeType', () => {
+	it('gives a line for each named type, and none for the empty case', () => {
+		expect(describeType('create')).toMatch(/post/i);
+		expect(describeType('generalist')).toMatch(/stand/i);
+		expect(describeType(null)).toBe('');
 	});
 });

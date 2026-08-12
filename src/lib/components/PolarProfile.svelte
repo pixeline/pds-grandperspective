@@ -18,7 +18,7 @@
 	let hover = $state(null); // the axis under the pointer/focus, or null
 	/** @type {number | null} */
 	let focusedIndex = $state(null); // keyboard focus index into layout.axes, or null
-	let showInfo = $state(false);
+	let tab = $state('chart'); // 'chart' | 'about'
 
 	const totalDrawn = $derived(
 		vector ? RAY_ORDER.reduce((s, k) => s + vector[k], 0) : 0
@@ -103,17 +103,33 @@
 <section class="polar" aria-label="Behavioural profile">
 	<div class="cap">
 		<span class="lbl">Behaviour</span>
-		<button
-			class="info"
-			aria-label="About this chart"
-			onmouseenter={() => (showInfo = true)}
-			onmouseleave={() => (showInfo = false)}
-			onfocus={() => (showInfo = true)}
-			onblur={() => (showInfo = false)}
-		>i</button>
+		<div class="tabs" role="tablist" aria-label="Behaviour panel view">
+			<button
+				class="tab"
+				role="tab"
+				aria-selected={tab === 'chart'}
+				class:on={tab === 'chart'}
+				onclick={() => (tab = 'chart')}>Chart</button>
+			<button
+				class="tab"
+				role="tab"
+				aria-selected={tab === 'about'}
+				class:on={tab === 'about'}
+				onclick={() => (tab = 'about')}>About</button>
+		</div>
 	</div>
 
-	{#if !vector || totalDrawn === 0}
+	{#if tab === 'about'}
+		<div class="about">
+			<p>Seven modes, counted from what this account has written: posts (Create), replies (Converse), reposts and quotes (Amplify), likes (React), lists and feeds (Curate), follows and blocks (Connect), profile records (Identity).</p>
+			<p>Rays are log-scaled: the rings mark 10, 100, 1k and 10k records. The headline type is the mode this account does most, measured against a typical account, because likes dominate almost every repo.</p>
+			<p>Hue marks the mode and greys out as it goes stale. A repo holds only what an account emits, so reading and lurking never appear.</p>
+			{#if vector && vector.unclassified > 0}
+				<p>{fmtNum(vector.unclassified)} record{vector.unclassified === 1 ? '' : 's'} went unclassified, across {vector.unclassifiedCols.length} collection{vector.unclassifiedCols.length === 1 ? '' : 's'}.</p>
+			{/if}
+			<p class="cite">Modes after Forrester Social Technographics (Li &amp; Bernoff, 2008).</p>
+		</div>
+	{:else if !vector || totalDrawn === 0}
 		<p class="empty">no records</p>
 	{:else}
 		<div
@@ -144,19 +160,6 @@
 			{/if}
 		</p>
 	{/if}
-
-	{#if showInfo}
-		<div class="pop" role="note">
-			<p><b>What this is.</b> Seven modes of participation, each ray counted from the records this account has written: original posts (Create), replies (Converse), reposts and quotes (Amplify), likes (React), lists and feeds (Curate), follows and blocks (Connect), and profile records (Identity).</p>
-			<p><b>Scale.</b> Each ray is log-scaled — the rings mark 10, 100, 1k and 10k records, so a ray at the rim means 10k or more. The overall size of the shape is how active the account is; the shape itself is its personality.</p>
-			<p><b>Colour.</b> Hue names the behaviour; it fades toward grey as that behaviour goes stale.</p>
-			<p><b>Caveat.</b> A best-guess estimate: an atproto repo records only what an account emits, so reading and lurking leave no trace and are not shown.</p>
-			{#if vector && vector.unclassified > 0}
-				<p>{fmtNum(vector.unclassified)} record{vector.unclassified === 1 ? '' : 's'} could not be classified, across {vector.unclassifiedCols.length} collection{vector.unclassifiedCols.length === 1 ? '' : 's'}.</p>
-			{/if}
-			<p class="cite">Modes after Forrester Social Technographics (Li &amp; Bernoff, 2008).</p>
-		</div>
-	{/if}
 </section>
 
 <style>
@@ -176,16 +179,20 @@
 		text-transform: uppercase;
 		color: var(--ink-soft);
 	}
-	.info {
-		width: 16px; height: 16px;
+	.tabs { display: flex; gap: 4px; }
+	.tab {
 		border: 1px solid var(--ink-soft);
 		background: transparent;
 		color: var(--ink-soft);
-		font-family: 'JetBrains Mono', monospace;
-		font-size: 10px;
-		line-height: 1;
-		cursor: help;
+		font-family: 'Inter', sans-serif;
+		font-size: 8.5px;
+		font-weight: 700;
+		letter-spacing: 0.12em;
+		text-transform: uppercase;
+		padding: 3px 8px;
+		cursor: pointer;
 	}
+	.tab.on { color: var(--ink); border-color: var(--ink); }
 	.plot { position: relative; align-self: center; }
 	.axlbl {
 		position: absolute;
@@ -220,15 +227,13 @@
 		color: var(--ink-soft);
 		text-align: center;
 	}
-	.pop {
-		border: 1px solid var(--ink-soft);
-		padding: 8px;
+	.about {
 		font-family: 'Inter', sans-serif;
 		font-size: 10.5px;
 		line-height: 1.5;
 		color: var(--ink);
 	}
-	.pop p { margin: 0 0 6px; }
-	.pop p:last-child { margin-bottom: 0; }
+	.about p { margin: 0 0 8px; }
+	.about p:last-child { margin-bottom: 0; }
 	.cite { color: var(--ink-soft); }
 </style>
