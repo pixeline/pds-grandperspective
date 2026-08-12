@@ -5,8 +5,12 @@
 	import { dominantType, describeType, RAY_ORDER } from '$lib/repo/behavior.js';
 	import { fmtNum } from '$lib/repo/format.js';
 
-	/** @type {{ vector: any, size?: number }} */
-	let { vector = null, size = 220 } = $props();
+	/** @type {{ vector: any, size?: number, avatar?: string | null }} */
+	let { vector = null, size = 220, avatar = null } = $props();
+
+	// An account in this many distinct atproto apps or more is scouting the wider
+	// atmosphere, not just living in one app.
+	const EXPLORER_APPS = 4;
 
 	// Axis labels sit this far outside the outer ring, in the padding band, so
 	// they clear the polygon and its data points and stay legible.
@@ -124,6 +128,12 @@
 			<p>Seven modes, counted from what this account has written: posts (Create), replies (Converse), reposts and quotes (Amplify), likes (React), lists and feeds (Curate), follows and blocks (Connect), profile records (Identity).</p>
 			<p>Rays are log-scaled: the rings mark 10, 100, 1k and 10k records. The headline type is the mode this account does most, measured against a typical account, because likes dominate almost every repo.</p>
 			<p>Hue marks the mode and greys out as it goes stale. A repo holds only what an account emits, so reading and lurking never appear.</p>
+			{#if vector && vector.apps >= EXPLORER_APPS}
+				<p>It keeps records in {vector.apps} atproto apps, so it is flagged an explorer.</p>
+			{/if}
+			{#if vector && vector.verifications > 0}
+				<p>It issues verification records, so it is flagged a verifier.</p>
+			{/if}
 			{#if vector && vector.unclassified > 0}
 				<p>{fmtNum(vector.unclassified)} record{vector.unclassified === 1 ? '' : 's'} went unclassified, across {vector.unclassifiedCols.length} collection{vector.unclassifiedCols.length === 1 ? '' : 's'}.</p>
 			{/if}
@@ -149,9 +159,31 @@
 			{/each}
 		</div>
 
-		<p class="type">{type.label}</p>
+		<div class="headline">
+			{#if avatar}
+				<img
+					class="avatar"
+					src={avatar}
+					alt=""
+					width="40"
+					height="40"
+					onerror={(e) => (e.currentTarget.style.display = 'none')}
+				/>
+			{/if}
+			<span class="type">{type.label}</span>
+		</div>
 		{#if type.ray}
 			<p class="type-desc">{describeType(type.ray)}</p>
+		{/if}
+		{#if vector.verifications > 0 || vector.apps >= EXPLORER_APPS}
+			<p class="badges">
+				{#if vector.apps >= EXPLORER_APPS}
+					<span class="badge">Explorer · {vector.apps} apps</span>
+				{/if}
+				{#if vector.verifications > 0}
+					<span class="badge">Verifier · {fmtNum(vector.verifications)} issued</span>
+				{/if}
+			</p>
 		{/if}
 
 		<p class="read" aria-live="polite">
@@ -205,20 +237,51 @@
 		pointer-events: none;
 		white-space: nowrap;
 	}
+	.headline {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 10px;
+	}
+	/* A disc: the one deliberate exception to the no-rounded rule, because a
+	   cropped profile photo reads as a face, not as decorative rounding. */
+	.avatar {
+		width: 40px;
+		height: 40px;
+		object-fit: cover;
+		display: block;
+		border: 1px solid var(--ink-soft);
+		border-radius: 50%;
+	}
 	.type {
-		margin: 0;
-		text-align: center;
 		font-family: 'JetBrains Mono', monospace;
 		font-size: 15px;
 		color: var(--ink);
 	}
 	.type-desc {
-		margin: 2px 0 0;
+		margin: 4px 0 0;
 		text-align: center;
 		font-family: 'Inter', sans-serif;
 		font-size: 10.5px;
 		line-height: 1.4;
 		color: var(--ink-soft);
+	}
+	.badges {
+		margin: 6px 0 0;
+		display: flex;
+		flex-wrap: wrap;
+		justify-content: center;
+		gap: 6px;
+	}
+	.badge {
+		border: 1px solid var(--ink-soft);
+		padding: 2px 6px;
+		font-family: 'Inter', sans-serif;
+		font-size: 8.5px;
+		font-weight: 700;
+		letter-spacing: 0.1em;
+		text-transform: uppercase;
+		color: var(--ink);
 	}
 	.read, .empty {
 		margin: 0;

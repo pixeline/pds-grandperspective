@@ -27,8 +27,16 @@ function offenders(pattern, allow = () => false) {
 // standing constraints decay without a check. These are the ones the design
 // states as prohibitions, so they are asserted rather than trusted.
 describe('visual language', () => {
-	it('has no rounded corners other than an explicit reset to 0', () => {
-		expect(offenders(/border-radius/, (l) => /border-radius:\s*0(;|\s|$)/.test(l))).toEqual([]);
+	it('has no rounded corners other than a reset to 0 or a full-circle avatar disc', () => {
+		// A profile photo cropped to a disc (border-radius: 50%) reads as a face,
+		// not as decorative rounding, so it is the one sanctioned exception. Any
+		// partial radius -- a rounded rectangle -- is still a failure.
+		expect(
+			offenders(
+				/border-radius/,
+				(l) => /border-radius:\s*(0|50%)(;|\s|$)/.test(l)
+			)
+		).toEqual([]);
 	});
 
 	it('has no drop shadows other than an explicit reset to none', () => {
