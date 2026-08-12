@@ -28,13 +28,13 @@
 {/if}
 
 <style>
+	/* No self-padding or divider: the rail spaces its children uniformly, so
+	   adding our own here would double the gap above this card unevenly. */
 	.card {
 		display: flex;
 		flex-direction: row;
 		align-items: center;
 		gap: 12px;
-		padding: 12px 0;
-		border-top: 1px solid var(--ink-soft);
 	}
 	/* A disc, the sanctioned exception to the no-rounded rule: a cropped face,
 	   not decorative rounding. */
