@@ -122,7 +122,7 @@
 
 <aside id="rail" class="rail" class:open>
 	<div class="head">
-		<h1>GrandPerspective<small>PDS EDITION</small></h1>
+		<h1>GrandPerspective<small>PDS EXPLORER</small></h1>
 		<!-- Only reachable when the rail is a drawer; hidden by CSS above the
 		     breakpoint, where the rail is a permanent column with nothing to
 		     close. -->

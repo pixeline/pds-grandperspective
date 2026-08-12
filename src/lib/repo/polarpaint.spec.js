@@ -77,11 +77,9 @@ describe('paintPolar', () => {
 		expect(ctx.calls.strokes.includes('#111')).toBe(true);
 	});
 
-	it('labels all four rings, once each, with the scale text', () => {
+	it('draws no text on the chart face (scale lives in the info popover)', () => {
 		const ctx = stubCtx();
 		paintPolar(ctx, layout, colors);
-		expect(ctx.calls.fillText.length).toBe(4);
-		const texts = ctx.calls.fillText.map((c) => c.text);
-		expect(texts).toEqual(['10', '100', '1k', '10k']);
+		expect(ctx.calls.fillText.length).toBe(0);
 	});
 });
