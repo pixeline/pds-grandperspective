@@ -96,42 +96,70 @@ export function behaviorVector(records) {
 const TYPE_LABEL = {
 	create: 'Broadcaster',
 	converse: 'Host',
-	amplify: 'Repeater',
+	amplify: 'Amplifier',
 	react: 'Listener',
 	curate: 'Curator',
 	connect: 'Connector',
-	identity: 'Newcomer'
+	identity: 'Newcomer',
+	generalist: 'Generalist'
 };
 
 /**
- * The single word for a profile: the label of its busiest ray. Ties break by
- * RAY_ORDER (iteration order, strictly-greater replace). A repo with no drawn
- * records has no type.
+ * Share of records a typical account spends in each mode. Likes swamp almost
+ * every repo, so ranking by raw count labels nearly everyone a Listener. These
+ * baselines let the type name the mode an account does *more than usual*, which
+ * is what actually distinguishes people. Rough by design (no live population is
+ * available client-side); shifting them only nudges the boundaries.
+ */
+const TYPICAL = {
+	react: 0.72,
+	connect: 0.13,
+	create: 0.055,
+	amplify: 0.045,
+	converse: 0.03,
+	curate: 0.01,
+	identity: 0.01
+};
+
+/** How far above its baseline a mode must reach to earn a named type. Below it,
+ *  nothing stands out and the account is a Generalist. */
+const STANDOUT = 1.25;
+
+/**
+ * The profile's headline type: the mode this account over-indexes on relative
+ * to TYPICAL, not its raw plurality. A balanced account is a Generalist; an
+ * empty repo has no type.
  * @param {ReturnType<behaviorVector>} vector
  * @returns {{ray: string|null, label: string}}
  */
 export function dominantType(vector) {
+	const total = RAY_ORDER.reduce((s, k) => s + vector[k], 0);
+	if (total === 0) return { ray: null, label: '—' };
+
 	let best = null;
-	let bestN = 0;
+	let bestIndex = 0;
 	for (const key of RAY_ORDER) {
-		if (vector[key] > bestN) {
-			bestN = vector[key];
+		const index = vector[key] / total / TYPICAL[key];
+		if (index > bestIndex) {
+			bestIndex = index;
 			best = key;
 		}
 	}
-	return best == null ? { ray: null, label: '—' } : { ray: best, label: TYPE_LABEL[best] };
+	if (best == null || bestIndex < STANDOUT) return { ray: 'generalist', label: 'Generalist' };
+	return { ray: best, label: TYPE_LABEL[best] };
 }
 
 /** One plain-language line per type, shown under the label so the word is not
  *  the only explanation of what the profile means. */
 const TYPE_BLURB = {
-	create: 'Mostly original posts and long-form — a maker of new content.',
-	converse: 'Mostly replies — lives in the conversation.',
-	amplify: 'Mostly reposts and quotes — a signal-booster.',
-	react: 'Mostly likes — receptive, rarely broadcasts.',
-	curate: 'Mostly lists, feeds and starter packs — an organiser.',
-	connect: 'Mostly follows and blocks — tends the social graph.',
-	identity: 'Little beyond a profile so far — a newcomer.'
+	create: 'Posts more than the typical account.',
+	converse: 'Lives in replies more than most.',
+	amplify: 'Reposts and quotes more than most.',
+	react: 'Likes far above average, and little else.',
+	curate: 'Builds lists and feeds unusually often.',
+	connect: 'Follows and blocks more than most.',
+	identity: 'Barely active beyond a profile.',
+	generalist: 'No single mode stands out.'
 };
 
 /**
