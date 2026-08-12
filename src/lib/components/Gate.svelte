@@ -19,7 +19,7 @@
       <img src="./favicon.svg" width="200" alt="GrandPerspective Logo" />
     </div>
 
-    <h1>GrandPerspective<small>PDS EDITION</small></h1>
+    <h1>GrandPerspective<small>PDS EXPLORER</small></h1>
 
     <p class="tagline">
       Visualize all records in any atproto repository as a Tree Map diagram.

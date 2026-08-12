@@ -446,7 +446,7 @@
 </script>
 
 <svelte:head>
-  <title>GrandPerspective — PDS edition</title>
+  <title>GrandPerspective — PDS explorer</title>
   <meta
     name="description"
     content="See where an atproto repository's bytes actually go, and act on what you find."

@@ -2,11 +2,17 @@
 <script>
 	import { polarLayout } from '$lib/repo/polar.js';
 	import { paintPolar } from '$lib/repo/polarpaint.js';
-	import { dominantType, RAY_ORDER } from '$lib/repo/behavior.js';
+	import { dominantType, describeType, RAY_ORDER } from '$lib/repo/behavior.js';
 	import { fmtNum } from '$lib/repo/format.js';
 
 	/** @type {{ vector: any, size?: number }} */
 	let { vector = null, size = 220 } = $props();
+
+	// Axis labels sit this far outside the outer ring, in the padding band, so
+	// they clear the polygon and its data points and stay legible.
+	const LABEL_GAP = 15;
+	const labelX = (a) => layout.center.x + (layout.radius + LABEL_GAP) * Math.cos(a.angle);
+	const labelY = (a) => layout.center.y + (layout.radius + LABEL_GAP) * Math.sin(a.angle);
 
 	let canvas = $state(null);
 	let hover = $state(null); // the axis under the pointer/focus, or null
@@ -18,7 +24,9 @@
 		vector ? RAY_ORDER.reduce((s, k) => s + vector[k], 0) : 0
 	);
 	const type = $derived(vector ? dominantType(vector) : { ray: null, label: '—' });
-	const layout = $derived(vector ? polarLayout(vector, { size }) : null);
+	// Extra padding leaves a band between the outer ring and the canvas edge for
+	// the axis labels to sit in, clear of the plotted shape.
+	const layout = $derived(vector ? polarLayout(vector, { size, pad: 32 }) : null);
 
 	const inkOf = (name) =>
 		getComputedStyle(document.documentElement).getPropertyValue(name).trim() || '#000';
@@ -121,11 +129,14 @@
 		>
 			<canvas bind:this={canvas} style="width:{size}px;height:{size}px"></canvas>
 			{#each layout.axes as a (a.key)}
-				<span class="axlbl" style="left:{a.x}px; top:{a.y}px">{a.label}</span>
+				<span class="axlbl" style="left:{labelX(a)}px; top:{labelY(a)}px">{a.label}</span>
 			{/each}
 		</div>
 
 		<p class="type">{type.label}</p>
+		{#if type.ray}
+			<p class="type-desc">{describeType(type.ray)}</p>
+		{/if}
 
 		<p class="read" aria-live="polite">
 			{#if hover}
@@ -136,9 +147,12 @@
 
 	{#if showInfo}
 		<div class="pop" role="note">
-			<p>A best-guess behavioural estimate from records this account emitted; reading and lurking leave no record and are not shown.</p>
+			<p><b>What this is.</b> Seven modes of participation, each ray counted from the records this account has written: original posts (Create), replies (Converse), reposts and quotes (Amplify), likes (React), lists and feeds (Curate), follows and blocks (Connect), and profile records (Identity).</p>
+			<p><b>Scale.</b> Each ray is log-scaled — the rings mark 10, 100, 1k and 10k records, so a ray at the rim means 10k or more. The overall size of the shape is how active the account is; the shape itself is its personality.</p>
+			<p><b>Colour.</b> Hue names the behaviour; it fades toward grey as that behaviour goes stale.</p>
+			<p><b>Caveat.</b> A best-guess estimate: an atproto repo records only what an account emits, so reading and lurking leave no trace and are not shown.</p>
 			{#if vector && vector.unclassified > 0}
-				<p>{fmtNum(vector.unclassified)} record{vector.unclassified === 1 ? '' : 's'} unclassified across {vector.unclassifiedCols.length} collection{vector.unclassifiedCols.length === 1 ? '' : 's'}.</p>
+				<p>{fmtNum(vector.unclassified)} record{vector.unclassified === 1 ? '' : 's'} could not be classified, across {vector.unclassifiedCols.length} collection{vector.unclassifiedCols.length === 1 ? '' : 's'}.</p>
 			{/if}
 			<p class="cite">Modes after Forrester Social Technographics (Li &amp; Bernoff, 2008).</p>
 		</div>
@@ -190,6 +204,14 @@
 		font-family: 'JetBrains Mono', monospace;
 		font-size: 15px;
 		color: var(--ink);
+	}
+	.type-desc {
+		margin: 2px 0 0;
+		text-align: center;
+		font-family: 'Inter', sans-serif;
+		font-size: 10.5px;
+		line-height: 1.4;
+		color: var(--ink-soft);
 	}
 	.read, .empty {
 		margin: 0;

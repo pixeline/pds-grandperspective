@@ -121,3 +121,24 @@ export function dominantType(vector) {
 	}
 	return best == null ? { ray: null, label: '—' } : { ray: best, label: TYPE_LABEL[best] };
 }
+
+/** One plain-language line per type, shown under the label so the word is not
+ *  the only explanation of what the profile means. */
+const TYPE_BLURB = {
+	create: 'Mostly original posts and long-form — a maker of new content.',
+	converse: 'Mostly replies — lives in the conversation.',
+	amplify: 'Mostly reposts and quotes — a signal-booster.',
+	react: 'Mostly likes — receptive, rarely broadcasts.',
+	curate: 'Mostly lists, feeds and starter packs — an organiser.',
+	connect: 'Mostly follows and blocks — tends the social graph.',
+	identity: 'Little beyond a profile so far — a newcomer.'
+};
+
+/**
+ * The sentence under the dominant-type word. Empty for a repo with no type.
+ * @param {string|null} ray
+ * @returns {string}
+ */
+export function describeType(ray) {
+	return ray == null ? '' : (TYPE_BLURB[ray] ?? '');
+}
